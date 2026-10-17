@@ -1,0 +1,91 @@
+"""批量与增量：并发上限、单条超时、逐条报错、跳过已打分。
+
+纪律（spec）：
+  - 单条失败不中断整批：每条独立捕获，结果里逐条带原因。
+  - 增量：同版本已打分文档跳过并计数（不调模型）。
+  - 超时按失败记录，不挂起。
+"""
+from __future__ import annotations
+
+import concurrent.futures as _cf
+import dataclasses
+from typing import Any, Iterable
+
+from .llm import LLMClient
+from .models import ScoreError
+from .prompt import PromptArtifact, load_prompt
+from .scoring import ScoreRequest, score_document
+
+
+def score_batch(
+    client: LLMClient,
+    docs: Iterable[ScoreRequest],
+    *,
+    store,
+    prompt: PromptArtifact | None = None,
+    max_concurrency: int = 4,
+    per_doc_timeout_s: float = 180.0,
+    skip_existing: bool = True,
+) -> dict[str, Any]:
+    """批量打分。返回 {results, skipped, failed, ok, total}。
+
+    results 逐条含 doc_id / status(ok|skipped|failed) / 记录或 error。
+    """
+    prompt = prompt or load_prompt("v1")
+    docs = list(docs)
+    results: list[dict[str, Any]] = []
+    skipped = failed = ok = 0
+
+    def work(req: ScoreRequest) -> dict[str, Any]:
+        if skip_existing and store is not None:
+            from .scoring import content_hash
+
+            chash = content_hash(req.text)
+            if store.get_score(req.doc_id, chash, prompt.version, client.cfg.model):
+                return {"doc_id": req.doc_id, "status": "skipped"}
+        try:
+            rec = score_document(client, req, prompt=prompt, store=store)
+            return {"doc_id": req.doc_id, "status": "ok", "record": rec}
+        except ScoreError as exc:
+            return {"doc_id": req.doc_id, "status": "failed", "error": f"拒绝：{exc}"}
+        except Exception as exc:  # 模型/网络错误也逐条记，不中断
+            return {"doc_id": req.doc_id, "status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+
+    with _cf.ThreadPoolExecutor(max_workers=max(1, max_concurrency)) as pool:
+        futures = {pool.submit(work, d): d for d in docs}
+        for fut, req in futures.items():
+            try:
+                r = fut.result(timeout=per_doc_timeout_s)
+            except _cf.TimeoutError:
+                r = {"doc_id": req.doc_id, "status": "failed", "error": f"超时（>{per_doc_timeout_s}s）"}
+            except Exception as exc:
+                r = {"doc_id": req.doc_id, "status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+            if r["status"] == "ok":
+                ok += 1
+            elif r["status"] == "skipped":
+                skipped += 1
+            else:
+                failed += 1
+            results.append(r)
+
+    return {
+        "total": len(docs),
+        "ok": ok,
+        "skipped": skipped,
+        "failed": failed,
+        "results": results,
+        "prompt_version": prompt.version,
+        "model": client.cfg.model,
+    }
+
+
+def requests_from_rows(rows: Iterable[dict[str, Any]]) -> list[ScoreRequest]:
+    """把外部文档行（doc_id/text/as_of/doc_type）转成打分请求。字段缺失即报错点名。"""
+    out: list[ScoreRequest] = []
+    for i, r in enumerate(rows):
+        missing = [k for k in ("doc_id", "text", "as_of") if not r.get(k)]
+        if missing:
+            raise ValueError(f"第 {i} 行缺少字段：{', '.join(missing)}")
+        out.append(ScoreRequest(doc_id=r["doc_id"], text=r["text"], as_of=r["as_of"],
+                                doc_type=r.get("doc_type")))
+    return out

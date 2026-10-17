@@ -1,0 +1,59 @@
+{
+  "schema": "mcp-tool-surface/v1",
+  "server": "fd-sentiment",
+  "entry_path": "/fd-sentiment",
+  "product_line": "wire",
+  "hosting": [
+    "shared-instance"
+  ],
+  "description": "fd-sentiment 文档情绪打分服务，8 工具五组：打分 / 查询 / 聚合 / 元信息 / 评测。分数可验证（evidence_spans 必填、quote 为原文逐字子串、偏移由服务定位修正）、可复现（prompt 版本 + 模型 + 幂等键 (doc_id, content_hash, prompt_version, model)，重复请求不重复调用模型）、可评测（金标命中率 + 置信度校准，校准失败显式标注）。聚合视图是分布统计，**不是情绪指数**。服务不取市场数据（point-in-time 由接口形状保证），唯一外部依赖是 LLM 网关（OpenAI 兼容，低温）。",
+  "skills_eligible_for_packs": [],
+  "tool_groups": [
+    {
+      "group": "scoring",
+      "level": "commercial",
+      "tools": [
+        "score_document",
+        "score_batch"
+      ],
+      "description": "打分入口（**有状态**：分数落 SQLite，路径由 FD_SENTIMENT_DB 指定；**唯一外部依赖是 LLM 网关**）。evidence_spans 为硬要求：无原文证据时拒绝打分而非返回空证据分数；quote 必须是原文逐字子串（空白归一化，不改写），偏移由服务在原文中定位修正。入口不接受市场数据类参数——point-in-time 由接口形状保证。"
+    },
+    {
+      "group": "query",
+      "level": "commercial",
+      "tools": [
+        "get_score",
+        "list_scores"
+      ],
+      "description": "分数查询（只读）。同 (doc_id, content_hash, prompt_version, model) 幂等键下可并存多个版本记录（prompt 换版/模型换版不覆盖旧分数）。"
+    },
+    {
+      "group": "aggregate",
+      "level": "commercial",
+      "tools": [
+        "aggregate_scores"
+      ],
+      "description": "区间聚合（只读）：已打分文档的分布统计——band 计数、均值分、均值置信度与覆盖说明。**明确不是情绪指数、不是行情指标**（指数需要定义与验证，未定义前只给事实）。"
+    },
+    {
+      "group": "meta",
+      "level": "commercial",
+      "tools": [
+        "current_prompt_version"
+      ],
+      "description": "版本与配置元信息（只读）：当前 prompt 版本、工件摘要、可用版本列表、模型与温度。"
+    },
+    {
+      "group": "eval",
+      "level": "commercial",
+      "tools": [
+        "run_evaluation",
+        "compare_evaluations"
+      ],
+      "description": "金标评测与版本对比（有状态：结果落 eval_runs）。输出命中率 + 按置信度分桶的准确率表；高置信桶低于低置信桶即**校准失败**并显式标注。金标集按 set_version 版本化。"
+    }
+  ],
+  "registry": {
+    "expected_tool_count": 8
+  }
+}
