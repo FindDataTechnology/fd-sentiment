@@ -18,12 +18,12 @@ from fastmcp import FastMCP
 
 from . import __version__
 from .aggregate import aggregate as _aggregate
-from .batch import score_batch as _score_batch, requests_from_rows
+from .batch import score_batch as _score_batch_impl, requests_from_rows
 from .evaluate import compare_runs as _compare_runs, run_eval as _run_eval
 from .llm import LLMClient, LLMConfig
 from .models import ScoreError
 from .prompt import available_versions, load_prompt
-from .scoring import ScoreRequest, score_document
+from .scoring import ScoreRequest, score_document as _score_document_impl
 from .storage import Store
 
 SERVER_NAME = "fd-sentiment"
@@ -64,7 +64,7 @@ def build_server() -> FastMCP:
         """
         store = _store()
         try:
-            rec = score_document(_client(store), ScoreRequest(doc_id=doc_id, text=text, as_of=as_of, doc_type=doc_type), store=store)
+            rec = _score_document_impl(_client(store), ScoreRequest(doc_id=doc_id, text=text, as_of=as_of, doc_type=doc_type), store=store)
             return rec
         except ScoreError as exc:
             return {"error": "refused", "reason": str(exc)}
@@ -82,7 +82,7 @@ def build_server() -> FastMCP:
         """
         store = _store()
         reqs = requests_from_rows(docs)
-        return _score_batch(_client(store), reqs, store=store, max_concurrency=max_concurrency,
+        return _score_batch_impl(_client(store), reqs, store=store, max_concurrency=max_concurrency,
                             per_doc_timeout_s=per_doc_timeout_s, skip_existing=skip_existing)
 
     @app.tool
