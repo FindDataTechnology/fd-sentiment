@@ -52,6 +52,8 @@ def build_server() -> FastMCP:
         ),
     )
 
+    DEFAULT_PROMPT = os.getenv("FD_SENTIMENT_PROMPT_VERSION", "v3")
+
     @app.tool
     def score_document(doc_id: str, text: str, as_of: str, doc_type: str | None = None) -> dict:
         """对单篇文档打分。
@@ -64,7 +66,7 @@ def build_server() -> FastMCP:
         """
         store = _store()
         try:
-            rec = _score_document_impl(_client(store), ScoreRequest(doc_id=doc_id, text=text, as_of=as_of, doc_type=doc_type), store=store)
+            rec = _score_document_impl(_client(store), ScoreRequest(doc_id=doc_id, text=text, as_of=as_of, doc_type=doc_type), store=store, prompt=load_prompt(DEFAULT_PROMPT))
             return rec
         except ScoreError as exc:
             return {"error": "refused", "reason": str(exc)}
@@ -134,7 +136,7 @@ model 下的分数**并存不覆盖**（幂等键含版本与模型，故换版�
         本工具只报版本与配置，不产出分数与 evidence_spans（那是打分入口的事，
         evidence 必填与"无证据拒绝"两条纪律见 score_document / score_batch）。"""
         cfg = LLMConfig.from_env()
-        art = load_prompt("v1")
+        art = load_prompt(prompt_version if prompt_version != "v1" else DEFAULT_PROMPT)
         return {"prompt_version": art.version, "prompt_digest": art.digest,
                 "available_versions": available_versions(), "model": cfg.model,
                 "temperature": cfg.temperature}
