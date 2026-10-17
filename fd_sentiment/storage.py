@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS scores (
     chunk_index     INTEGER,
     chunk_total     INTEGER,
     doc_type        TEXT,
+    tier_check_json TEXT,
     UNIQUE (doc_id, content_hash, prompt_version, model)
 );
 CREATE INDEX IF NOT EXISTS idx_scores_doc     ON scores (doc_id, as_of);
@@ -83,6 +84,11 @@ class Store:
         self._lock = threading.Lock()
         with self._conn() as c:
             c.executescript(SCHEMA)
+            # 老库迁移：strong_tier_check 是 v3 引入的列，已存在的库 ALTER 补上
+            # （executescript 的 CREATE TABLE IF NOT EXISTS 不会改已建的表）
+            cols = {r[1] for r in c.execute("PRAGMA table_info(scores)")}
+            if "tier_check_json" not in cols:
+                c.execute("ALTER TABLE scores ADD COLUMN tier_check_json TEXT")
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=30, isolation_level=None)
@@ -107,14 +113,15 @@ class Store:
                 cur = c.execute(
                     """INSERT INTO scores
                        (doc_id, content_hash, prompt_version, model, score, band, confidence,
-                        evidence_json, as_of, scored_at, chunk_index, chunk_total, doc_type)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        evidence_json, as_of, scored_at, chunk_index, chunk_total, doc_type, tier_check_json)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         rec["doc_id"], rec["content_hash"], rec["prompt_version"], rec["model"],
                         rec["score"], rec["band"], rec["confidence"],
                         json.dumps(rec["evidence_spans"], ensure_ascii=False),
                         rec["as_of"], rec["scored_at"],
                         rec.get("chunk_index"), rec.get("chunk_total"), rec.get("doc_type"),
+                        json.dumps(rec["strong_tier_check"], ensure_ascii=False) if rec.get("strong_tier_check") else None,
                     ),
                 )
                 row = c.execute("SELECT * FROM scores WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -230,4 +237,6 @@ class Store:
 def _row_to_score(row: sqlite3.Row) -> dict[str, Any]:
     d = dict(row)
     d["evidence_spans"] = json.loads(d.pop("evidence_json"))
+    tj = d.pop("tier_check_json", None)
+    d["strong_tier_check"] = json.loads(tj) if tj else None
     return d

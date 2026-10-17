@@ -194,6 +194,10 @@ def _score_chunk(
             span = EvidenceSpan(quote=quote_text, char_start=loc[0], char_end=loc[1])
         spans.append(span)
 
+    stc_out = data.get("strong_tier_check")
+    if isinstance(stc_out, dict):
+        stc_out = {k: stc_out.get(k) for k in ("direction_clear", "quant_anchor_hit", "anchor_text", "reason_operational", "summary")}
+
     s = SentimentScore(
         doc_id=doc_id,
         score=score_val,
@@ -209,7 +213,7 @@ def _score_chunk(
     )
     # 分块内也要过一遍：quote 必须在**模型看到的材料文本**里（全文档级由合并后再查）
     validate_score(s, text=seen_text)
-    return s
+    return s, stc_out
 
 
 def _merge(scores: list[SentimentScore], weights: list[int]) -> SentimentScore:
@@ -271,12 +275,16 @@ def score_document(
 
     chunks = _chunk_text(flat)
     part_scores: list[SentimentScore] = []
+    stc_checks: list[dict[str, Any]] = []
     for i, chunk in enumerate(chunks):
-        part_scores.append(_score_chunk(
+        s_i, stc_i = _score_chunk(
             client, prompt, chunk, doc_id=req.doc_id, as_of=req.as_of,
             doc_type=req.doc_type, chunk_index=i, chunk_total=len(chunks),
             original_text=req.text,
-        ))
+        )
+        part_scores.append(s_i)
+        if stc_i:
+            stc_checks.append(stc_i)
 
     final = part_scores[0] if len(part_scores) == 1 else _merge(part_scores, [len(c) for c in chunks])
     # 全文档级复核：证据须能在原文定位；偏移优先对齐原文，退化为 flatten 文本口径
@@ -285,6 +293,10 @@ def score_document(
     rec = final.to_dict()
     rec["content_hash"] = chash
     rec["doc_type"] = req.doc_type
+    # strong_tier_check 落库：门槛申报是可审计性的载体，只用于服务端核查而不
+    # 落库等于"可审计"落空（v3 实测时该字段为 null 才发现）
+    if stc_checks:
+        rec["strong_tier_check"] = stc_checks[0] if len(stc_checks) == 1 else {"chunks": stc_checks}
     if store is not None:
         stored, created = store.insert_score(rec)
         stored["created"] = created

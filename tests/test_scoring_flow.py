@@ -212,3 +212,20 @@ def test_strong_tier_absent_still_works(store):
     llm = FakeLLM([good_response(QUOTE)])
     rec = score_document(llm, ScoreRequest("d1", TEXT, "2026-10-17"), prompt=None, store=store)
     assert rec["band"] in BANDS
+
+
+def test_strong_tier_check_persisted(store):
+    """门槛申报必须落库——只用于服务端核查而不落库等于"可审计"落空。"""
+    llm = FakeLLM([{
+        "score": 0.68, "band": "strong_bullish", "confidence": 0.85,
+        "strong_tier_check": {"direction_clear": True, "quant_anchor_hit": True,
+                              "anchor_text": "同比增长 65% 至 80%", "reason_operational": True,
+                              "summary": "增幅超50%且理由指向经营实质"},
+        "evidence_spans": [{"quote": QUOTE, "char_start": 0, "char_end": len(QUOTE)}],
+    }])
+    rec = score_document(llm, ScoreRequest("d1", TEXT, "2026-10-17"), store=store)
+    assert rec["strong_tier_check"]["quant_anchor_hit"] is True
+    assert rec["strong_tier_check"]["anchor_text"] == "同比增长 65% 至 80%"
+    # 落库后仍可读回
+    again = store.get_score("d1", rec["content_hash"], rec["prompt_version"], rec["model"])
+    assert again["strong_tier_check"]["summary"]
