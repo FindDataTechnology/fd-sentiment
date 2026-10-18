@@ -125,13 +125,19 @@ def run_eval(
 
     scored_results = _score_gold(client, store, gold, prompt, concurrency)
 
+    # 金标覆盖度：缺档会让模型输出该档时被记成「预测错误」——那是评测表的洞，
+    # 不是模型的错。gold-v6 缺 strong_* 两档，实测把 exact 压低约 23 个百分点。
+    coverage = store.gold_coverage(set_version)
+    uncovered = [b for b, n in coverage.items() if n == 0]
+
     per_item: list[dict[str, Any]] = []
+    coverage_gap_items: list[dict[str, Any]] = []
     failures: list[dict[str, str]] = []
     for res in scored_results:
         if res["error"] is not None:
             failures.append({"doc_id": res["doc_id"], "error": res["error"]})
             continue
-        per_item.append({
+        item = {
             "doc_id": res["doc_id"],
             "expected_band": res["expected_band"],
             "predicted_band": res["rec"]["band"],
@@ -139,7 +145,13 @@ def run_eval(
             "confidence": res["rec"]["confidence"],
             "hit": res["hit"],
             "bucket": _bucket(res["rec"]["confidence"]),
-        })
+        }
+        # 模型判了一个金标里没有的档 -> 单列，不算「预测错误」
+        if res["rec"]["band"] in uncovered:
+            item["uncovered_band"] = True
+            coverage_gap_items.append(item)
+        else:
+            per_item.append(item)
 
     scored = len(per_item)
     hits = sum(1 for i in per_item if i["hit"])
@@ -186,6 +198,18 @@ def run_eval(
         "samples_scored": scored,
         "hits": hits,
         "hit_rate": hit_rate,
+        "coverage": {
+            "bands": coverage,
+            "uncovered": uncovered,
+            "note": (
+                "金标五档齐全"
+                if not uncovered
+                else f"金标未覆盖 {'、'.join(uncovered)}：模型输出这些档位的样本已单列，"
+                     "不计入 exact 分母（这些不是预测错误，而是评测表缺档）"
+            ),
+            "excluded_from_exact": len(coverage_gap_items),
+        },
+        "coverage_gap_items": coverage_gap_items,
         "calipers": _calipers(per_item),
         "calibration": {"ok": calibration_ok, "note": calibration_note, "buckets": calib_rows},
         "failures": failures,

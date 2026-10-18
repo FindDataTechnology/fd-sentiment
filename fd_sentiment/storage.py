@@ -14,6 +14,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from .models import BANDS as _ALL_BANDS
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS scores (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -198,6 +200,22 @@ class Store:
     def gold_versions(self) -> list[str]:
         with self._conn() as c:
             return [r[0] for r in c.execute("SELECT DISTINCT set_version FROM gold_set ORDER BY set_version")]
+
+    def gold_coverage(self, set_version: str) -> dict[str, int]:
+        """各档位的样本条数（五档齐全则返回五个键，缺档补 0）。
+
+        金标缺档会让模型输出该档时被记成「预测错误」——不是模型判错，是评测表
+        里没有那一格。gold-v6 缺 strong_bullish/strong_bearish 整整两档，实测
+        把 exact 压低约 23 个百分点。故覆盖度必须是可查询的事实，不是印象。
+        """
+        out = {b: 0 for b in _ALL_BANDS}
+        with self._conn() as c:
+            for band, n in c.execute(
+                "SELECT expected_band, COUNT(*) FROM gold_set WHERE set_version=? GROUP BY expected_band",
+                (set_version,),
+            ):
+                out[band] = n
+        return out
 
     # ---- eval runs ----------------------------------------------------
     def insert_eval_run(self, rec: dict[str, Any]) -> None:

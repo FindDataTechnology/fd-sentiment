@@ -374,3 +374,66 @@ def test_prompts_shipped_inside_package():
         assert load_prompt("v3").digest
     finally:
         os.chdir(old)
+
+
+def test_coverage_reports_all_five_bands(store):
+    """覆盖度必须报出全部五档（缺档补 0），不能只报有样本的档。"""
+    store.upsert_gold(set_version="cv1", doc_id="a", as_of="2026-10-18",
+                      expected_band="bullish", text=TEXT)
+    cov = store.gold_coverage("cv1")
+    assert set(cov) == {"strong_bullish", "bullish", "neutral", "bearish", "strong_bearish"}
+    assert cov["bullish"] == 1
+    assert cov["strong_bullish"] == 0
+
+
+def test_eval_excludes_uncovered_band_from_exact(store):
+    """模型判了金标没有的档 -> 单列，不计入 exact 分母。
+
+    这是 gold-v6 的核心缺陷：金标缺 strong_*，模型判强档必然记错。
+    正确行为是承认「评测表缺档」，而不是把模型记为错。
+    """
+    # 金标只有 bullish 与 neutral，没有 strong_bullish
+    store.upsert_gold(set_version="cv2", doc_id="m1", as_of="2026-10-18",
+                      expected_band="bullish", text=TEXT)
+    store.upsert_gold(set_version="cv2", doc_id="m2", as_of="2026-10-18",
+                      expected_band="neutral", text=TEXT)
+    # 模型：m1 判 strong_bullish（未覆盖档）、m2 判 neutral（命中）
+    # 金标按 doc_id 升序遍历，故响应顺序须对齐（m1 先于 m2）
+    llm = FakeLLM([
+        good_response(QUOTE, 0.7, "strong_bullish", 0.9),
+        good_response(QUOTE, 0.0, "neutral", 0.8),
+    ])
+    rep = run_eval(llm, store, set_version="cv2")
+    # 金标只有 bullish/neutral，故其余三档都是未覆盖
+    assert set(rep["coverage"]["uncovered"]) == {"strong_bullish", "bearish", "strong_bearish"}
+    assert rep["coverage"]["excluded_from_exact"] == 1
+    assert len(rep["coverage_gap_items"]) == 1
+    assert rep["coverage_gap_items"][0]["predicted_band"] == "strong_bullish"
+    # 分母只剩 1 条（m2），且命中
+    assert rep["samples_scored"] == 1
+    assert rep["hit_rate"] == 1.0
+    assert "未覆盖" in rep["coverage"]["note"]
+
+
+def test_eval_full_coverage_counts_normally(store):
+    """五档齐全时不做任何排除，行为与原先一致。"""
+    for band, score in (("strong_bullish", 0.7), ("bullish", 0.3), ("neutral", 0.0),
+                        ("bearish", -0.3), ("strong_bearish", -0.7)):
+        store.upsert_gold(set_version="cv3", doc_id=f"f_{band}", as_of="2026-10-18",
+                          expected_band=band, text=TEXT)
+    # doc_id 升序：bearish < bullish < neutral < strong_bearish < strong_bullish
+    # （字符串序，'bearish' < 'bullish' < 'neutral' < 'strong_...' 且 be < bu < st）
+    llm = FakeLLM([
+        good_response(QUOTE, -0.3, "bearish", 0.8),
+        good_response(QUOTE, 0.3, "bullish", 0.8),
+        good_response(QUOTE, 0.0, "neutral", 0.85),
+        good_response(QUOTE, -0.7, "strong_bearish", 0.9),
+        good_response(QUOTE, 0.7, "strong_bullish", 0.9),
+    ])
+    rep = run_eval(llm, store, set_version="cv3")
+    assert rep["coverage"]["uncovered"] == []
+    assert rep["coverage"]["excluded_from_exact"] == 0
+    assert rep["coverage_gap_items"] == []
+    assert rep["samples_scored"] == 5
+    assert rep["hit_rate"] == 1.0
+    assert "五档齐全" in rep["coverage"]["note"]
