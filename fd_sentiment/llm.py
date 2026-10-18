@@ -31,7 +31,7 @@ class LLMConfig:
     temperature: float = 0.0
     # 推理型模型（deepseek-v4.1-flash 等）先输出 reasoning_content，预算太小会把
     # 最终 JSON 截断——默认给足；换非推理模型可调小。
-    max_tokens: int = 4000
+    max_tokens: int = 32000
     timeout_s: float = 120.0
     max_retries: int = 2
 
@@ -42,7 +42,7 @@ class LLMConfig:
             api_key=os.getenv("FD_SENTIMENT_LLM_API_KEY", os.getenv("LLM_GATEWAY_API_KEY", "")),
             model=os.getenv("FD_SENTIMENT_MODEL", ""),
             temperature=float(os.getenv("FD_SENTIMENT_TEMPERATURE", "0")),
-            max_tokens=int(os.getenv("FD_SENTIMENT_MAX_TOKENS", "4000")),
+            max_tokens=int(os.getenv("FD_SENTIMENT_MAX_TOKENS", "32000")),
             timeout_s=float(os.getenv("FD_SENTIMENT_TIMEOUT_S", "120")),
             max_retries=int(os.getenv("FD_SENTIMENT_MAX_RETRIES", "2")),
         )
