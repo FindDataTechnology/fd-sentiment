@@ -17,7 +17,6 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY fd_sentiment ./fd_sentiment
-COPY prompts ./prompts
 
 RUN if [ -n "$PIP_INDEX_URL" ]; then pip install --no-cache-dir -i "$PIP_INDEX_URL" ".[server]"; else pip install --no-cache-dir ".[server]"; fi \
  && useradd -m -u 1000 appuser \

@@ -52,7 +52,7 @@ def build_server() -> FastMCP:
         ),
     )
 
-    DEFAULT_PROMPT = os.getenv("FD_SENTIMENT_PROMPT_VERSION", "v3")
+    DEFAULT_PROMPT = os.getenv("FD_SENTIMENT_PROMPT_VERSION", "v4")
 
     @app.tool
     def score_document(doc_id: str, text: str, as_of: str, doc_type: str | None = None) -> dict:
@@ -143,7 +143,9 @@ model 下的分数**并存不覆盖**（幂等键含版本与模型，故换版�
                     os.getenv("FD_SENTIMENT_PROMPT_VERSION")}
 
     @app.tool
-    def run_evaluation(set_version: str, prompt_version: str | None = None) -> dict:
+    def run_evaluation(
+        set_version: str, prompt_version: str | None = None, concurrency: int = 1
+    ) -> dict:
         """对金标集跑评测：命中率 + 按置信度分桶的准确率（校准）。
 
         高置信桶准确率低于低置信桶即**校准失败**，报告显式标注。
@@ -154,10 +156,18 @@ model 下的分数**并存不覆盖**（幂等键含版本与模型，故换版�
         样本不足时如实标注"不足以判定校准"，不伪造结论。
         prompt_version 省略时用服务当前默认版本（与 score_document 同一把），
         避免"评的是 v1、跑的是 v3"这种版本错配。
+
+        concurrency 默认 1（串行）。并发会把 60 条从约 15 分钟压到约 5 分钟，
+        但并发下网关超时更多，而超时样本计入 failures 不进分母——两份报告的
+        命中率不能直接当同一次测量比较。报告里的 concurrency 字段记录该轮用的是
+        哪个值，compare_evaluations 会一并呈现。
         """
         store = _store()
         art = load_prompt(prompt_version or DEFAULT_PROMPT)
-        return _run_eval(_client(store), store, set_version=set_version, prompt=art)
+        return _run_eval(
+            _client(store), store, set_version=set_version, prompt=art,
+            concurrency=max(1, int(concurrency)),
+        )
 
     @app.tool
     def compare_evaluations(run_ids: list[str]) -> dict:

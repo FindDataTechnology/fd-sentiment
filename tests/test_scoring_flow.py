@@ -298,3 +298,79 @@ def test_calipers_empty_is_safe():
     got = _calipers([])
     assert got["samples"] == 0
     assert got["exact"] == 0.0 and got["direction"] == 0.0 and got["adjacent"] == 0.0
+
+
+def test_eval_concurrent_matches_serial_shape(store):
+    """并发评测的结果形状、分母、逐项顺序都必须与串行一致。
+
+    并发只是提速手段，不能改变报告语义：命中数、失败数、per_item 的
+    doc_id 顺序（按金标原序）都要一样。若哪天并发实现打乱了顺序，
+    compare_evaluations 的并列对比就会错位。
+    """
+    for i in range(6):
+        store.upsert_gold(set_version="gc", doc_id=f"c{i}", as_of="2026-10-17",
+                          expected_band="strong_bullish", text=TEXT)
+    llm = FakeLLM([good_response(QUOTE, 0.7, "strong_bullish", 0.9) for _ in range(6)])
+    rep = run_eval(llm, store, set_version="gc", concurrency=3)
+    assert rep["concurrency"] == 3
+    assert rep["samples_expected"] == 6
+    assert rep["samples_scored"] == 6
+    assert rep["hit_rate"] == 1.0
+    assert rep["calipers"]["samples"] == 6
+    # 顺序必须是金标原序（Doc_id 升序），不是完成先后
+    assert [i["doc_id"] for i in rep["per_item"]] == sorted(f"c{i}" for i in range(6))
+
+
+def test_eval_concurrent_failures_not_counted_in_denominator(store):
+    """并发下失败的样本同样计入 failures、不进分母——与串行同一口径。"""
+    for i in range(4):
+        store.upsert_gold(set_version="gd", doc_id=f"d{i}", as_of="2026-10-17",
+                          expected_band="strong_bullish", text=TEXT)
+    from fd_sentiment.models import ScoreError
+
+    # 前两条成功，后两条拒答；并发执行时响应顺序不确定，故用可重入的假客户端
+    class RefusingLLM(FakeLLM):
+        def chat(self, messages, *, max_tokens=1500, doc_id=None):
+            if doc_id and doc_id >= "d2":
+                raise ScoreError("无可用情绪证据")
+            return super().chat(messages, max_tokens=max_tokens, doc_id=doc_id)
+
+    llm = RefusingLLM([good_response(QUOTE, 0.7, "strong_bullish", 0.9) for _ in range(2)])
+    rep = run_eval(llm, store, set_version="gd", concurrency=2)
+    assert rep["samples_expected"] == 4
+    assert rep["samples_scored"] == 2
+    assert len(rep["failures"]) == 2
+    assert all("拒绝" in f["error"] for f in rep["failures"])
+    # 分母只有成功的两条
+    assert rep["hit_rate"] == 1.0
+
+
+def test_eval_serial_is_default(store):
+    """默认必须是串行——并发是显式选择，不能悄悄改变失败率构成。"""
+    store.upsert_gold(set_version="ge", doc_id="e1", as_of="2026-10-17",
+                      expected_band="strong_bullish", text=TEXT)
+    llm = FakeLLM([good_response(QUOTE, 0.7, "strong_bullish", 0.9)])
+    rep = run_eval(llm, store, set_version="ge")
+    assert rep["concurrency"] == 1
+
+
+def test_prompts_shipped_inside_package():
+    """prompts 必须在包内（随 wheel 分发），不能靠仓库根目录的相对路径。
+
+    曾经的缺陷：prompts 放仓库根，pip install 不打包，从非 /app 目录调用
+    就报「prompt 版本 'v3' 不存在（site-packages/prompts/v3）」。
+    """
+    from fd_sentiment.prompt import PROMPT_DIR, load_prompt
+
+    assert PROMPT_DIR.name == "prompts"
+    assert PROMPT_DIR.parent.name == "fd_sentiment", "prompts 必须是包的子目录"
+    assert (PROMPT_DIR / "v3" / "system.md").exists()
+    # 与 cwd 无关
+    import os
+
+    old = os.getcwd()
+    try:
+        os.chdir("/")
+        assert load_prompt("v3").digest
+    finally:
+        os.chdir(old)

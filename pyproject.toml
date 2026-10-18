@@ -20,5 +20,10 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["fd_sentiment*"]
 
+# prompts 是带版本的工件（换版=换幂等键），必须随包分发：
+# 放仓库根目录时 pip install 不会带上，从非 /app 目录运行就找不到 v2/v3。
+[tool.setuptools.package-data]
+fd_sentiment = ["prompts/*/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

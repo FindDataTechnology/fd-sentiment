@@ -12,7 +12,7 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
-PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
+PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
 
 BANDS_SPEC = """\
 五档定义（band 必须取其中之一，且与 score 的区间一致）：

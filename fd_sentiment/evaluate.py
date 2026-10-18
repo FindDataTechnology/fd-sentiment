@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from .llm import LLMClient
@@ -65,50 +66,83 @@ def _bucket(conf: float) -> str:
     return "unknown"
 
 
+def _score_one(client: LLMClient, store: Store, g: dict[str, Any], prompt: PromptArtifact) -> dict[str, Any]:
+    """打一条金标。异常在此收敛成 error 字段，不让单条失败炸掉整轮。"""
+    try:
+        rec = score_document(
+            client,
+            ScoreRequest(doc_id=g["doc_id"], text=g["text"], as_of=g["as_of"]),
+            prompt=prompt,
+            store=store,
+        )
+    except ScoreError as exc:
+        return {"doc_id": g["doc_id"], "expected_band": g["expected_band"], "rec": None,
+                "hit": False, "error": f"拒绝：{exc}"}
+    except Exception as exc:
+        return {"doc_id": g["doc_id"], "expected_band": g["expected_band"], "rec": None,
+                "hit": False, "error": f"{type(exc).__name__}: {exc}"}
+    return {"doc_id": g["doc_id"], "expected_band": g["expected_band"], "rec": rec,
+            "hit": rec["band"] == g["expected_band"], "error": None}
+
+
+def _score_gold(
+    client: LLMClient, store: Store, gold: list[dict[str, Any]], prompt: PromptArtifact, concurrency: int
+) -> list[dict[str, Any]]:
+    """按 concurrency 打分。结果按 gold 原序返回，报告与串行版逐字段可比。
+
+    Store 每次操作独立连接、写入加锁，LLMClient 无可变共享状态，故多线程安全。
+    """
+    if concurrency <= 1 or len(gold) <= 1:
+        return [_score_one(client, store, g, prompt) for g in gold]
+    workers = min(concurrency, len(gold))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        return list(ex.map(lambda g: _score_one(client, store, g, prompt), gold))
+
+
 def run_eval(
     client: LLMClient,
     store: Store,
     *,
     set_version: str,
     prompt: PromptArtifact | None = None,
+    concurrency: int = 1,
 ) -> dict[str, Any]:
-    """对金标集跑一次评测并落库。返回报告 dict。"""
+    """对金标集跑一次评测并落库。返回报告 dict。
+
+    `concurrency` 默认 1（串行），因为并发会改变失败率的构成：并发下网关
+    更容易超时，而超时样本被计入 failures 而非分母——失败样本的多少会
+    间接影响命中率。故并发是**显式选择**而非默认：想要快就明说，并知道
+    自己拿到的是一份可能与串行不同的报告。
+
+    实测（gold-v6 60 条，prompt v3，deepseek-v4.1-flash）：串行 920s；
+    并发 4 路时约 250-350s，且失败样本集合与串行不完全相同（超时增多，
+    但 reasoning 泄漏不增多——后者由 max_tokens 决定）。
+    """
     prompt = prompt or load_prompt("v1")
     gold = store.list_gold(set_version)
     if not gold:
         raise ValueError(f"金标集 {set_version!r} 为空或不存在")
 
-    per_item: list[dict[str, Any]] = []
-    hits = 0
-    scored = 0
-    failures: list[dict[str, str]] = []
+    scored_results = _score_gold(client, store, gold, prompt, concurrency)
 
-    for g in gold:
-        try:
-            rec = score_document(
-                client,
-                ScoreRequest(doc_id=g["doc_id"], text=g["text"], as_of=g["as_of"]),
-                prompt=prompt,
-                store=store,
-            )
-        except ScoreError as exc:
-            failures.append({"doc_id": g["doc_id"], "error": f"拒绝：{exc}"})
+    per_item: list[dict[str, Any]] = []
+    failures: list[dict[str, str]] = []
+    for res in scored_results:
+        if res["error"] is not None:
+            failures.append({"doc_id": res["doc_id"], "error": res["error"]})
             continue
-        except Exception as exc:  # 模型错误也记下，不让一次失败炸掉整轮评测
-            failures.append({"doc_id": g["doc_id"], "error": f"{type(exc).__name__}: {exc}"})
-            continue
-        scored += 1
-        hit = rec["band"] == g["expected_band"]
-        hits += 1 if hit else 0
         per_item.append({
-            "doc_id": g["doc_id"],
-            "expected_band": g["expected_band"],
-            "predicted_band": rec["band"],
-            "score": rec["score"],
-            "confidence": rec["confidence"],
-            "hit": hit,
-            "bucket": _bucket(rec["confidence"]),
+            "doc_id": res["doc_id"],
+            "expected_band": res["expected_band"],
+            "predicted_band": res["rec"]["band"],
+            "score": res["rec"]["score"],
+            "confidence": res["rec"]["confidence"],
+            "hit": res["hit"],
+            "bucket": _bucket(res["rec"]["confidence"]),
         })
+
+    scored = len(per_item)
+    hits = sum(1 for i in per_item if i["hit"])
 
     hit_rate = round(hits / scored, 4) if scored else 0.0
 
@@ -147,6 +181,7 @@ def run_eval(
         "prompt_digest": prompt.digest,
         "model": client.cfg.model,
         "set_version": set_version,
+        "concurrency": concurrency,
         "samples_expected": len(gold),
         "samples_scored": scored,
         "hits": hits,
