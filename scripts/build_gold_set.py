@@ -307,6 +307,11 @@ def main() -> int:
     ap.add_argument("--set-version", default="gold-v1")
     ap.add_argument("--target", type=int, default=54)
     ap.add_argument("--db", default=str(ROOT / "e2e.db"))
+    ap.add_argument(
+        "--tickers", default="",
+        help="逗号分隔的额外公司代码（追加到默认池）。补偏档时用中小市值公司："
+             "大盘股的预减按「亏损金额绝对值重大」判据几乎必然升到 strong_*。",
+    )
     args = ap.parse_args()
 
     from fd_sentiment.sanitize import flatten
@@ -323,33 +328,68 @@ def main() -> int:
     # 扩充到 20 家：五档齐全需要足够的强档样本，而单家公司的预增/预亏公告
     # 有限（gold-v6 的 12 家只凑出三档）。前 8 家蓝筹给正面/中性，后 12 家
     # 含周期股与已知预亏公司给负面与强负面。
+    #
+    # `--tickers` 可追加公司（逗号分隔）。补**偏档**（bullish/bearish）时必须
+    # 追加中小市值公司：大盘股的预减动辄数亿元，按 prompt v5 的「亏损金额
+    # 绝对值重大」判据几乎必然升到 strong_*，于是偏档永远只剩零星几条。
+    # 这不是判据的问题——判据与 prompt 同源且正确——是取样池的市值偏差。
     tickers = [
         "600519", "000333", "000001", "600036", "000858", "601318", "600030", "601899",
         "601111", "600029", "000002", "600048", "601088", "600188", "000898", "600019",
         "601398", "600028", "000063", "002415",
     ]
+    if args.tickers:
+        for extra in args.tickers.split(","):
+            extra = extra.strip()
+            if extra and extra not in tickers:
+                tickers.append(extra)
     counts: dict[str, int] = {}
     added = 0
     seen: set[str] = set()
 
     # 轮转采样：先每家公司取 1 条，再取第 2 条……避免前几家公司（蓝筹）
     # 把配额吃满而负面公司池永远轮不到——三档均衡靠的是覆盖面，不是排序。
+    #
+    # 但"按公司轮转"仍会让**类别**失衡：每家的 bucket 里业绩预告排在最前，
+    # 中小市值公司一加进来，前几轮全是业绩预告，neutral 类（权益分派/股东
+    # 大会/董事会/公司治理）一条都轮不到。所以 bucket 按**类别交错**排列
+    # （各取第 1 条、各取第 2 条……），让轮转同时覆盖公司与类别两个维度。
     pending: dict[str, list[tuple[str, dict]]] = {}
     for ticker in tickers:
         co = c.lookup_company(ticker)
         if not co:
             continue
-        bucket: list[tuple[str, dict]] = []
+        by_category: dict[str, list[dict]] = {}
         for category in ("业绩预告", "风险提示", "权益分派", "股东大会", "董事会", "公司治理"):
             try:
                 rows = c.query_announcements(co["stock_code"], co["org_id"], category=category, limit=25)
             except Exception as exc:
                 print(f"  ! {ticker}/{category}: {exc}")
                 continue
-            for r in rows:
-                if r.get("pdf_url"):
-                    bucket.append((category, r))
+            by_category[category] = [r for r in rows if r.get("pdf_url")]
+        bucket: list[tuple[str, dict]] = []
+        depth = max((len(v) for v in by_category.values()), default=0)
+        for i in range(depth):
+            for category, rows in by_category.items():
+                if i < len(rows):
+                    bucket.append((category, rows[i]))
         pending[ticker] = bucket
+
+    # 类别配额：金标要覆盖**五档**，而 neutral 类公告（权益分派/股东大会/
+    # 董事会/公司治理）在真实公告里占绝对多数。纯轮转采样会被它们淹没
+    # （实测 100 条里 neutral 占 82），强档只剩个位数；反过来只取业绩预告
+    # 又会让 bearish 全被「亏损金额重大」推到 strong_bearish。
+    # 配额按「信号类别 : 中性类别」大致 2:1 分配，各档才有机会达标。
+    SIGNAL_CATEGORIES = ("业绩预告", "风险提示")
+    category_quota = {
+        "业绩预告": max(1, int(args.target * 0.55)),
+        "风险提示": max(1, int(args.target * 0.15)),
+    }
+    # 中性类共享一个总上限：它们只在金标里扮演"不该被判成有方向"的对照组，
+    # 数量再多也不增加信息量，却会挤掉信号类（实测不设限时 neutral 占 83%）。
+    neutral_budget = max(1, int(args.target * 0.30))
+    used_by_category: dict[str, int] = {}
+    used_neutral = 0
 
     round_idx = 0
     while added < args.target and any(round_idx < len(v) for v in pending.values()):
@@ -362,6 +402,11 @@ def main() -> int:
             category, r = bucket[round_idx]
             aid = r["announcement_id"]
             if aid in seen:
+                continue
+            quota = category_quota.get(category)
+            if quota is not None and used_by_category.get(category, 0) >= quota:
+                continue
+            if category not in SIGNAL_CATEGORIES and used_neutral >= neutral_budget:
                 continue
             # 正文必须先取：强度档靠正文的量化锚点判定（sentiment-gold-coverage:
             # 标注依据与判据一致性）。先判档再取正文会让标注意义上"看不见数字"，
@@ -384,6 +429,9 @@ def main() -> int:
                 note=f"{ticker}｜{category}｜{r['title'][:40]}",
             )
             counts[band] = counts.get(band, 0) + 1
+            used_by_category[category] = used_by_category.get(category, 0) + 1
+            if category not in SIGNAL_CATEGORIES:
+                used_neutral += 1
             added += 1
             print(f"  + {aid} {band:15s} {r['title'][:34]}")
         round_idx += 1

@@ -210,6 +210,26 @@ def run_eval(
         })
     thin_bands = [r["expected_band"] for r in band_rows if not r["enough_samples"]]
 
+    # 总命中率的附注：它是加权平均，权重就是各档样本数，所以最大的那一档
+    # 能把它拉向自己的准确率。样本不足的档被它稀释或掩盖时，单独引用总
+    # 命中率会得出与分层结论相反的印象——附注要指名是哪一档在主导。
+    dominant = max(band_rows, key=lambda r: r["samples"]) if band_rows else None
+    if dominant:
+        share = dominant["samples"] / scored if scored else 0.0
+        hit_rate_note = (
+            f"总命中率是各档按样本量加权的平均：{dominant['expected_band']} 占 "
+            f"{share:.0%}（{dominant['samples']}/{scored}），其准确率 "
+            f"{dominant['accuracy']:.0%} 对总值的牵引最大。"
+        )
+        if thin_bands:
+            hit_rate_note += (
+                f" 另有 {len(thin_bands)} 个档位样本不足，"
+                "单独引用总命中率会掩盖这些档的真实表现。"
+            )
+        hit_rate_note += " 对外引用时须同时给出分档表，不得只引用总命中率。"
+    else:
+        hit_rate_note = ""
+
     # 校准表：每个置信桶的样本数与准确率
     buckets: dict[str, dict[str, Any]] = {}
     for it in per_item:
@@ -313,6 +333,7 @@ def run_eval(
         "samples_scored": scored,
         "hits": hits,
         "hit_rate": hit_rate,
+        "hit_rate_note": hit_rate_note,
         "coverage": {
             "bands": coverage,
             "uncovered": uncovered,

@@ -710,3 +710,42 @@ def test_eval_without_prompt_uses_default_not_v1(store):
     rep = run_eval(llm, store, set_version="ev1")
     assert rep["prompt_version"] == default_version()
     assert rep["prompt_version"] != "v1"
+
+
+def test_hit_rate_note_names_the_dominant_band(store):
+    """总命中率是加权平均，报告必须指名哪一档在牵引它。
+
+    spec `sentiment-calibration-verdict` 要求总命中率不得单独对外引用：
+    一档样本占多数时，它的准确率就是总值的主要成分，单看总值会掩盖
+    其余档的真实表现。
+    """
+    # 3 条 strong_bullish（全对）+ 1 条 neutral（全错）→ 主导档占 75%
+    for i in range(3):
+        store.upsert_gold(set_version="w1", doc_id=f"b{i}", as_of="2026-10-18",
+                          expected_band="strong_bullish", text=TEXT)
+    store.upsert_gold(set_version="w1", doc_id="n0", as_of="2026-10-18",
+                      expected_band="neutral", text=TEXT)
+    llm = FakeLLM([
+        good_response(QUOTE, 0.7, "strong_bullish", 0.9),
+        good_response(QUOTE, 0.7, "strong_bullish", 0.9),
+        good_response(QUOTE, 0.7, "strong_bullish", 0.9),
+        good_response(QUOTE, 0.0, "strong_bullish", 0.9),
+    ])
+    rep = run_eval(llm, store, set_version="w1")
+    note = rep["hit_rate_note"]
+    assert "strong_bullish" in note
+    assert "75%" in note
+    assert "不得只引用总命中率" in note
+
+
+def test_hit_rate_note_flags_thin_bands(store):
+    """样本不足的档必须在总命中率附注里被点名。"""
+    for i in range(12):
+        store.upsert_gold(set_version="w2", doc_id=f"m{i}", as_of="2026-10-18",
+                          expected_band="strong_bullish", text=TEXT)
+    store.upsert_gold(set_version="w2", doc_id="thin", as_of="2026-10-18",
+                      expected_band="bearish", text=TEXT)
+    llm = FakeLLM([good_response(QUOTE, 0.7, "strong_bullish", 0.9) for _ in range(13)])
+    rep = run_eval(llm, store, set_version="w2")
+    assert "样本不足" in rep["hit_rate_note"]
+    assert rep["by_band"]["insufficient"] == ["bearish"]
