@@ -1,0 +1,492 @@
+{
+ "set_version": "gold-v6",
+ "count": 60,
+ "annotation": "显式人工规则表标注（scripts/build_gold_set.py RULES），非模型输出；标注只看标题与正文方向词，不看数字大小猜。",
+ "distribution": {
+  "bullish": 24,
+  "neutral": 24,
+  "bearish": 12
+ },
+ "items": [
+  {
+   "doc_id": "1201334797",
+   "as_of": "2015-07-22",
+   "expected_band": "bullish",
+   "note": "601318｜业绩预告｜2015年中期业绩预增公告",
+   "text_sha256": "fbd30e44187012a432f4586d3884bf5d620bc83fc6d5cdcef27d90303ee5d710",
+   "text_chars": 628
+  },
+  {
+   "doc_id": "1201944036",
+   "as_of": "2016-01-26",
+   "expected_band": "bullish",
+   "note": "600029｜业绩预告｜2015年年度业绩预增公告",
+   "text_sha256": "c23c67f703d638768b2fabb50d48a36599fed75ea9a931076df22f7be83bac54",
+   "text_chars": 743
+  },
+  {
+   "doc_id": "1202341867",
+   "as_of": "2016-05-26",
+   "expected_band": "neutral",
+   "note": "000333｜风险提示｜关于本次收购的一般风险提示公告",
+   "text_sha256": "53476b645b85c6285c86553581970b9e029896f3947c74de50bfebb48dbebc2d",
+   "text_chars": 484
+  },
+  {
+   "doc_id": "1204375966",
+   "as_of": "2018-01-30",
+   "expected_band": "bullish",
+   "note": "600519｜业绩预告｜2017年度业绩预增公告",
+   "text_sha256": "89a40b213434b6d115f1551575bea066f9b07ee29bf828a9f381e05b5383478c",
+   "text_chars": 932
+  },
+  {
+   "doc_id": "1205814530",
+   "as_of": "2019-01-30",
+   "expected_band": "bearish",
+   "note": "600029｜业绩预告｜2018年年度业绩预减公告",
+   "text_sha256": "62f260be7ccbe72a766b179964608920a05b0745419090a4e21dba2e8bcc0374",
+   "text_chars": 891
+  },
+  {
+   "doc_id": "1205816710",
+   "as_of": "2019-01-31",
+   "expected_band": "bullish",
+   "note": "000858｜业绩预告｜2018年度业绩预增公告",
+   "text_sha256": "21c6f85cfbefc67f857b2fbfd7d9e4a6306f669a2f54986482c2e61f7b25781e",
+   "text_chars": 673
+  },
+  {
+   "doc_id": "1208497066",
+   "as_of": "2020-09-25",
+   "expected_band": "neutral",
+   "note": "000333｜风险提示｜关于分拆子公司上市的一般风险提示性公告",
+   "text_sha256": "c2649e422ab5aaa9ea8a05cc7269a52a3f6acf3eb8517c35e0e20208a91f3b2b",
+   "text_chars": 733
+  },
+  {
+   "doc_id": "1209215932",
+   "as_of": "2021-01-29",
+   "expected_band": "bearish",
+   "note": "600029｜业绩预告｜2020年年度业绩预亏公告",
+   "text_sha256": "cc853e724eda4f4534a4cf2bdf8b12ca65f92ddd059083390179e571914ba201",
+   "text_chars": 1000
+  },
+  {
+   "doc_id": "1212308416",
+   "as_of": "2022-01-28",
+   "expected_band": "bearish",
+   "note": "600029｜业绩预告｜南方航空2021年年度业绩预亏公告",
+   "text_sha256": "874d11dbdd77258966c898d67b8029eda5b547e15dab805ebacb58ac4e3977f5",
+   "text_chars": 1011
+  },
+  {
+   "doc_id": "1214055997",
+   "as_of": "2022-07-15",
+   "expected_band": "bearish",
+   "note": "600029｜业绩预告｜南方航空2022年半年度业绩预亏公告",
+   "text_sha256": "36d22e084e50e1e728222783187fffe97ab4b22fefdcbc29be970e2b9ef487bd",
+   "text_chars": 958
+  },
+  {
+   "doc_id": "1215725596",
+   "as_of": "2023-01-30",
+   "expected_band": "bearish",
+   "note": "600029｜业绩预告｜南方航空2022年年度业绩预亏公告",
+   "text_sha256": "f88adf09b09e66d914c75690c0cc0a87189b32806c828d25b6a8d0e79d027584",
+   "text_chars": 1005
+  },
+  {
+   "doc_id": "1217302290",
+   "as_of": "2023-07-14",
+   "expected_band": "bearish",
+   "note": "600029｜业绩预告｜南方航空2023年半年度业绩预亏公告",
+   "text_sha256": "899519624897900c6d739c15c089dc51a66cf1f0c026801ea1b563e83db1c7e6",
+   "text_chars": 934
+  },
+  {
+   "doc_id": "1219012979",
+   "as_of": "2024-01-26",
+   "expected_band": "bearish",
+   "note": "600029｜业绩预告｜南方航空2023年年度业绩预亏公告",
+   "text_sha256": "2b46fbd9ded2bf246a3fac6ef336074c14a547c49fa6594cc6a046b20f49c031",
+   "text_chars": 962
+  },
+  {
+   "doc_id": "1220616148",
+   "as_of": "2024-07-11",
+   "expected_band": "bearish",
+   "note": "600029｜业绩预告｜南方航空2024年半年度业绩预亏公告",
+   "text_sha256": "e9b1334401807efcb1f2e2d2cd5089a0bcf42e18b671034404d496c7a68a0616",
+   "text_chars": 1003
+  },
+  {
+   "doc_id": "1222432140",
+   "as_of": "2025-01-24",
+   "expected_band": "bearish",
+   "note": "600029｜业绩预告｜南方航空2024年年度业绩预亏公告",
+   "text_sha256": "3d70f47c921c87b872bfc7899d09351d0a8bf772845daa9ed830300fa72d9770",
+   "text_chars": 1029
+  },
+  {
+   "doc_id": "1222993902",
+   "as_of": "2025-04-02",
+   "expected_band": "bullish",
+   "note": "600519｜权益分派｜贵州茅台2024年年度利润分配方案公告",
+   "text_sha256": "fe8a00e844b5e289db5494d1e20dfee06834aeac85927d99ab81c3d323adc547",
+   "text_chars": 1677
+  },
+  {
+   "doc_id": "1223412468",
+   "as_of": "2025-04-29",
+   "expected_band": "neutral",
+   "note": "000333｜风险提示｜关于分拆子公司上市的一般风险提示性公告",
+   "text_sha256": "21c2d85f96bfcdfe4620255cd1acab225e242ce0aecd2ebd870ef1074dfb208b",
+   "text_chars": 791
+  },
+  {
+   "doc_id": "1223879819",
+   "as_of": "2025-06-13",
+   "expected_band": "bullish",
+   "note": "600519｜权益分派｜贵州茅台关于调整2024年年度利润分配方案每股分红金额的公告",
+   "text_sha256": "a18a19a770fe91e8515ff6ea7adf3f57c21ccb2a7a940d478920e92f487d7513",
+   "text_chars": 1283
+  },
+  {
+   "doc_id": "1223934491",
+   "as_of": "2025-06-19",
+   "expected_band": "neutral",
+   "note": "600519｜权益分派｜贵州茅台2024年年度权益分派实施公告",
+   "text_sha256": "5627f9d7cf8be78d164c28dfad7a681e5a323f8149e08c78848e071075f8eb81",
+   "text_chars": 2444
+  },
+  {
+   "doc_id": "1224164332",
+   "as_of": "2025-07-14",
+   "expected_band": "bearish",
+   "note": "600029｜业绩预告｜南方航空2025年半年度业绩预亏公告",
+   "text_sha256": "b0618429b8e9b17ebd70ede3d89f75cff9cf602ff5d7b432467c6c70b822e390",
+   "text_chars": 973
+  },
+  {
+   "doc_id": "1224626728",
+   "as_of": "2025-08-29",
+   "expected_band": "bullish",
+   "note": "000333｜权益分派｜关于2025年中期利润分配方案的公告",
+   "text_sha256": "26dff7f588be2c4c208d0920dd9ad9c3ab69818e2236a2af8c5ad6431dfb7dc4",
+   "text_chars": 2033
+  },
+  {
+   "doc_id": "1224789659",
+   "as_of": "2025-11-05",
+   "expected_band": "bullish",
+   "note": "600519｜权益分派｜贵州茅台关于2025年中期利润分配方案暨贯彻落实“提质增效重回报”专项行动方案的",
+   "text_sha256": "ab9d133fddedf1079739dd82a2d9f0859a09372d23fc4d4e6866b0ca6b62fabb",
+   "text_chars": 2708
+  },
+  {
+   "doc_id": "1224799414",
+   "as_of": "2025-11-11",
+   "expected_band": "neutral",
+   "note": "000333｜权益分派｜2025年中期A股利润分配实施公告",
+   "text_sha256": "68546a40bbf862dfec1236be9f72d95f96aaf81331085d0f92eb7612532a1168",
+   "text_chars": 2474
+  },
+  {
+   "doc_id": "1224867074",
+   "as_of": "2025-12-10",
+   "expected_band": "neutral",
+   "note": "600519｜权益分派｜贵州茅台2025年中期权益分派实施公告",
+   "text_sha256": "20fa340b0a3aec65a236f1b31eb7ba21b3c2b8a84ed300919849c60fa5b40518",
+   "text_chars": 1888
+  },
+  {
+   "doc_id": "1225058117",
+   "as_of": "2026-03-30",
+   "expected_band": "bullish",
+   "note": "000333｜权益分派｜关于2025年度利润分配方案的公告",
+   "text_sha256": "a386eb40fbffe0f90ce36fb8bd180c8af26cd52d4ac94b1e61ff103451127ecb",
+   "text_chars": 4683
+  },
+  {
+   "doc_id": "1225114720",
+   "as_of": "2026-04-16",
+   "expected_band": "bullish",
+   "note": "600519｜权益分派｜贵州茅台关于2025年年度利润分配方案及2026年中期利润分配安排的公告",
+   "text_sha256": "2517d2e192dc82d0f04b96801f8ff1960f58881f718f2d0129138e2f87d79331",
+   "text_chars": 1786
+  },
+  {
+   "doc_id": "1225305961",
+   "as_of": "2026-05-14",
+   "expected_band": "neutral",
+   "note": "001393｜风险提示｜上市首日风险提示公告",
+   "text_sha256": "95ea71333924de828054c519179cb27e859de3fc07c6e887810808df83c52b17",
+   "text_chars": 12204
+  },
+  {
+   "doc_id": "1225329427",
+   "as_of": "2026-05-25",
+   "expected_band": "neutral",
+   "note": "001393｜风险提示｜股票交易异常波动公告",
+   "text_sha256": "88ed6bf0b011332c523d39b824ca62f1dfe35cfb0d2202563d22a7da04fbe5f2",
+   "text_chars": 1111
+  },
+  {
+   "doc_id": "1225347653",
+   "as_of": "2026-06-02",
+   "expected_band": "bullish",
+   "note": "600519｜权益分派｜贵州茅台关于调整2025年年度利润分配方案每股分红金额的公告",
+   "text_sha256": "30a641955d901618591759f955961977f225eebe83baab167a37f09bd62c7ca2",
+   "text_chars": 1487
+  },
+  {
+   "doc_id": "1225376750",
+   "as_of": "2026-06-17",
+   "expected_band": "neutral",
+   "note": "001393｜股东大会｜上海市锦天城（北京）律师事务所关于北京维通利电气股份有限公司2026年第一次临时",
+   "text_sha256": "9b0cd1fe4eadd737634a5bd053871cab9a83686634e64a6085ee0b588be90abb",
+   "text_chars": 3462
+  },
+  {
+   "doc_id": "1225379934",
+   "as_of": "2026-06-21",
+   "expected_band": "neutral",
+   "note": "600519｜权益分派｜贵州茅台2025年年度权益分派实施公告",
+   "text_sha256": "fb653d809a225a06586d6b39f625c063a1e78283dacbf6f7da22963cf9b9c76f",
+   "text_chars": 1903
+  },
+  {
+   "doc_id": "1225381921",
+   "as_of": "2026-06-22",
+   "expected_band": "neutral",
+   "note": "000333｜权益分派｜2025年度A股利润分配实施公告",
+   "text_sha256": "ac49a7ad9a366857c5e68ea5dd6876a2022ac641502645d208f5a8b75336f781",
+   "text_chars": 2520
+  },
+  {
+   "doc_id": "1225404203",
+   "as_of": "2026-07-01",
+   "expected_band": "neutral",
+   "note": "688106｜风险提示｜金宏气体：股票交易异常波动暨风险提示公告",
+   "text_sha256": "f4c578c74daa2b99734c87aea85c1a22f580d409d7dc6c97ed5fcee2fba5420f",
+   "text_chars": 3331
+  },
+  {
+   "doc_id": "1225413383",
+   "as_of": "2026-07-07",
+   "expected_band": "neutral",
+   "note": "001393｜股东大会｜关于召开2026年第二次临时股东会的通知",
+   "text_sha256": "f446513c6a2f218aaecfe9b7c4227ca28747ba8b2660330ffb48455bd8ec404f",
+   "text_chars": 3138
+  },
+  {
+   "doc_id": "1225413678",
+   "as_of": "2026-07-07",
+   "expected_band": "neutral",
+   "note": "001248｜董事会｜2026年第六次董事会决议公告",
+   "text_sha256": "2450870e7f98987f21a61295609d9fc09e5feeccf1799f5fc274047f2e8e35e8",
+   "text_chars": 1509
+  },
+  {
+   "doc_id": "1225417855",
+   "as_of": "2026-07-09",
+   "expected_band": "neutral",
+   "note": "000858｜权益分派｜2025年度分红派息实施公告",
+   "text_sha256": "e9634744a87a826f1bfa7f0971de87058d8fe63dea2f5a537152969c9773d323",
+   "text_chars": 2937
+  },
+  {
+   "doc_id": "1225424881",
+   "as_of": "2026-07-14",
+   "expected_band": "bearish",
+   "note": "600029｜业绩预告｜南方航空2026年半年度业绩预亏公告",
+   "text_sha256": "bbfc6c2e79c745df844170983e34f401ed7450fed12eeea5d81c1653f6576b70",
+   "text_chars": 1103
+  },
+  {
+   "doc_id": "1225426598",
+   "as_of": "2026-07-15",
+   "expected_band": "bullish",
+   "note": "000858｜权益分派｜关于2025年度分红派息实施后调整回购股份价格上限的公告",
+   "text_sha256": "7ba0bbc916acd1d0861bf6fc206af7bf00adb527382bd110e34f06566f66c5f4",
+   "text_chars": 1820
+  },
+  {
+   "doc_id": "1225439779",
+   "as_of": "2026-07-23",
+   "expected_band": "neutral",
+   "note": "001393｜股东大会｜2026年第二次临时股东会决议公告",
+   "text_sha256": "8f33e673d03bfb6183caeecc9525235fccd852496e26c9a0e706a28c1548dd13",
+   "text_chars": 2683
+  },
+  {
+   "doc_id": "1225439780",
+   "as_of": "2026-07-23",
+   "expected_band": "neutral",
+   "note": "001393｜股东大会｜上海市锦天城（北京）律师事务所关于北京维通利电气股份有限公司2026年第二次临时",
+   "text_sha256": "5c0834afdc9bb78d9367f0c7c145b6f655b9ae518c692f61dc8e6553a0be1b91",
+   "text_chars": 4063
+  },
+  {
+   "doc_id": "1225480115",
+   "as_of": "2026-08-18",
+   "expected_band": "neutral",
+   "note": "001393｜股东大会｜关于召开2026年第三次临时股东会的通知",
+   "text_sha256": "c735c4bf30cfc83061336115c16ab84a449b3d72e897c26f9ebbf508cdfa89d4",
+   "text_chars": 4242
+  },
+  {
+   "doc_id": "1225505055",
+   "as_of": "2026-08-25",
+   "expected_band": "neutral",
+   "note": "001248｜董事会｜2026年第七次董事会决议公告",
+   "text_sha256": "67edda52cc66489fc762d947165162541de760fa80f6e7240ed54a92612734ee",
+   "text_chars": 2307
+  },
+  {
+   "doc_id": "1225531406",
+   "as_of": "2026-08-28",
+   "expected_band": "bullish",
+   "note": "000333｜权益分派｜关于2026年中期利润分配方案的公告",
+   "text_sha256": "b776af0964e5d6a5c293e9bcef29688eab1a596ef9767842330596708b47ff0f",
+   "text_chars": 1828
+  },
+  {
+   "doc_id": "1225547427",
+   "as_of": "2026-09-03",
+   "expected_band": "neutral",
+   "note": "001393｜股东大会｜关于召开2026年第四次临时股东会的通知",
+   "text_sha256": "328e8c4bc7d243a64a92430e1cbcfdd79c5ac1314b87b3a8f8c3c1ed517bb49d",
+   "text_chars": 2890
+  },
+  {
+   "doc_id": "1225547428",
+   "as_of": "2026-09-03",
+   "expected_band": "neutral",
+   "note": "001393｜股东大会｜2026年第三次临时股东会决议公告",
+   "text_sha256": "8aecd5d045f5dd0d183b62e0b82378f99f8eade2d6c94cc9cb7798d0211d22d4",
+   "text_chars": 2455
+  },
+  {
+   "doc_id": "1225547429",
+   "as_of": "2026-09-03",
+   "expected_band": "neutral",
+   "note": "001393｜股东大会｜上海市锦天城（北京）律师事务所关于北京维通利电气股份有限公司2026年第三次临时",
+   "text_sha256": "d977636c8bb9b4f33ca05266cfd71c199e26dcc42064584d4966efff3f6a917b",
+   "text_chars": 4332
+  },
+  {
+   "doc_id": "1225575701",
+   "as_of": "2026-09-21",
+   "expected_band": "neutral",
+   "note": "001393｜股东大会｜2026年第四次临时股东会决议公告",
+   "text_sha256": "237e95d7847d102ec20e261d5f7d05d9bbab13e3bf5ce1e0900d8dc0757f7597",
+   "text_chars": 1942
+  },
+  {
+   "doc_id": "1225575702",
+   "as_of": "2026-09-21",
+   "expected_band": "neutral",
+   "note": "001393｜股东大会｜上海市锦天城（北京）律师事务所关于北京维通利电气股份有限公司2026年第四次临时",
+   "text_sha256": "1c038b2df4a7105bb882315dc9e56f39447ec149277146467d011c89e50d603c",
+   "text_chars": 3290
+  },
+  {
+   "doc_id": "13771222",
+   "as_of": "2004-03-11",
+   "expected_band": "bullish",
+   "note": "600519｜业绩预告｜2003年度业绩预增公告",
+   "text_sha256": "ef92f61db1e24578ab4a8ac802e7b4a94e4c4941ab02406a3ef547640bf7fccb",
+   "text_chars": 668
+  },
+  {
+   "doc_id": "37043031",
+   "as_of": "2008-01-28",
+   "expected_band": "bullish",
+   "note": "601318｜业绩预告｜2007年度业绩预增公告",
+   "text_sha256": "aef51405a8acdb8480062ec794d268aaf48325d5de7a06797a30fc2ae95430df",
+   "text_chars": 764
+  },
+  {
+   "doc_id": "38750401",
+   "as_of": "2008-04-14",
+   "expected_band": "bullish",
+   "note": "000001｜业绩预告｜2008年第一季度业绩预增公告",
+   "text_sha256": "0291f29860b1d10cce212e6d4b0d7c08cffe1ad482dfc9c34b238eeb6b9914d3",
+   "text_chars": 941
+  },
+  {
+   "doc_id": "40694859",
+   "as_of": "2008-06-22",
+   "expected_band": "bullish",
+   "note": "000001｜业绩预告｜2008年中期业绩预增公告",
+   "text_sha256": "e6a16aa3bc4d007350aa7e61698f8c7c728eb753fdaf8c5797fae6c328134c89",
+   "text_chars": 1233
+  },
+  {
+   "doc_id": "44105411",
+   "as_of": "2008-10-12",
+   "expected_band": "bullish",
+   "note": "000001｜业绩预告｜2008年第三季度业绩预增公告",
+   "text_sha256": "05f4e6cdbfa6d128476797c794659314bb3dd496306c64109ac7503cf0c3f719",
+   "text_chars": 871
+  },
+  {
+   "doc_id": "44351010",
+   "as_of": "2008-10-17",
+   "expected_band": "bearish",
+   "note": "601318｜业绩预告｜2008年第三季度业绩预亏公告 ",
+   "text_sha256": "8a4609591998b57d59ec371fd5b1afc8ff12cdffec06b4359360bfacbc877f76",
+   "text_chars": 848
+  },
+  {
+   "doc_id": "57561086",
+   "as_of": "2010-01-29",
+   "expected_band": "bullish",
+   "note": "601318｜业绩预告｜2009年度业绩预增公告",
+   "text_sha256": "01883b2981c424c9754bc8a3ebc5399772c3e8f396b5c2813ff5a557126a7c94",
+   "text_chars": 1078
+  },
+  {
+   "doc_id": "60458343",
+   "as_of": "2012-01-17",
+   "expected_band": "bullish",
+   "note": "600519｜业绩预告｜2011年度业绩预增公告",
+   "text_sha256": "a22a4cb0c00fdaca6c8676c76c8b469291e9402c1c67a96e2ebf65d6a83688c0",
+   "text_chars": 1236
+  },
+  {
+   "doc_id": "61236077",
+   "as_of": "2012-07-08",
+   "expected_band": "bullish",
+   "note": "000858｜业绩预告｜2012年半年度业绩预增公告",
+   "text_sha256": "56675e417b20bbf0fb839a3dd6eee6332092530e30d701f8d6e95fbb3fa57660",
+   "text_chars": 555
+  },
+  {
+   "doc_id": "61650581",
+   "as_of": "2012-10-14",
+   "expected_band": "bullish",
+   "note": "000858｜业绩预告｜2012年第三季度业绩预增公告",
+   "text_sha256": "1c34fac3f32a31bfc23a4613a9403121212412f241ef36173abe3d95d2b666f3",
+   "text_chars": 894
+  },
+  {
+   "doc_id": "62006522",
+   "as_of": "2013-01-10",
+   "expected_band": "bullish",
+   "note": "000858｜业绩预告｜2012年度业绩预增公告",
+   "text_sha256": "9addfa4a5b2c9aab760419fd08fa7d24d6d7145d4a6484fa4cd69686244b861b",
+   "text_chars": 595
+  },
+  {
+   "doc_id": "62065601",
+   "as_of": "2013-01-24",
+   "expected_band": "bullish",
+   "note": "600519｜业绩预告｜2012年度业绩预增公告",
+   "text_sha256": "6be87dc653bc6428a65484e6541d8350a223ea3d0fb077f7401c5062e0ef41b6",
+   "text_chars": 531
+  }
+ ]
+}
