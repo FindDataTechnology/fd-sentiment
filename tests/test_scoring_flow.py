@@ -465,3 +465,179 @@ def test_eval_reports_per_band_breakdown(store):
     assert rows["bearish"]["enough_samples"] is False
     assert rep["by_band"]["insufficient"] == ["bearish"]
     assert "不具统计意义" in rep["by_band"]["note"]
+
+
+def _make_calib(store, set_version, spec):
+    """spec: [(expected_band, confidence, predicted_band), ...] 按 doc_id 序。"""
+    for i, (exp, conf, pred) in enumerate(spec):
+        store.upsert_gold(set_version=set_version, doc_id=f"k{i:03d}", as_of="2026-10-18",
+                          expected_band=exp, text=TEXT)
+    return FakeLLM([
+        good_response(QUOTE, _score_of(pred), pred, conf) for _, conf, pred in spec
+    ])
+
+
+def _score_of(band):
+    return {"strong_bullish": 0.7, "bullish": 0.3, "neutral": 0.0,
+            "bearish": -0.3, "strong_bearish": -0.7}[band]
+
+
+def test_calibration_detects_non_monotonic_shape(store):
+    """三桶非单调时必须指出形状与最低桶，不能只说「高置信不如低置信」。
+
+    这是实际踩到的：v4 三桶 0.70/0.41/0.47，最低在中间桶。
+    """
+    # 全判 strong_bullish、金标全 strong_bullish，只靠 confidence 分桶
+    # 低桶(0.6) 全对、中桶(0.75) 全错、高桶(0.9) 全对 -> 非单调
+    spec = (
+        [("strong_bullish", 0.60, "strong_bullish") for _ in range(3)]      # 低桶 100%
+        + [("bullish", 0.75, "strong_bullish") for _ in range(4)]           # 中桶 0%
+        + [("strong_bullish", 0.90, "strong_bullish") for _ in range(4)]    # 高桶 100%
+    )
+    llm = _make_calib(store, "nm1", spec)
+    rep = run_eval(llm, store, set_version="nm1")
+    cal = rep["calibration"]
+    assert cal["shape"] == "non_monotonic"
+    assert cal["lowest_bucket"] == "0.70-0.85"
+    assert "非单调" in cal["note"]
+    assert "最低点在" in cal["note"]
+
+
+def test_calibration_monotonic_increasing_passes(store):
+    """单调递增才算校准正常。"""
+    spec = (
+        [("bearish", 0.55, "strong_bullish") for _ in range(3)]              # 低桶 0%
+        + [("strong_bullish", 0.75, "strong_bullish") for _ in range(3)]     # 中桶 100%
+        + [("strong_bullish", 0.90, "strong_bullish") for _ in range(3)]     # 高桶 100%
+    )
+    llm = _make_calib(store, "mi1", spec)
+    rep = run_eval(llm, store, set_version="mi1")
+    assert rep["calibration"]["shape"] == "monotonic_increasing"
+    assert rep["calibration"]["ok"] is True
+    assert "单调递增" in rep["calibration"]["note"]
+
+
+def test_calibration_monotonic_decreasing_fails(store):
+    """单调递减是明确的校准失败。"""
+    spec = (
+        [("strong_bullish", 0.55, "strong_bullish") for _ in range(3)]       # 低桶 100%
+        + [("bearish", 0.75, "strong_bullish") for _ in range(3)]            # 中桶 0%
+        + [("bearish", 0.90, "strong_bullish") for _ in range(3)]            # 高桶 0%
+    )
+    llm = _make_calib(store, "md1", spec)
+    rep = run_eval(llm, store, set_version="md1")
+    assert rep["calibration"]["shape"] == "monotonic_decreasing"
+    assert rep["calibration"]["ok"] is False
+    assert "单调递减" in rep["calibration"]["note"]
+
+
+def test_calibration_excluded_bucket_reported(store):
+    """样本不足的桶从判定中排除，但要单列，不能静默丢弃。"""
+    spec = (
+        [("strong_bullish", 0.60, "strong_bullish") for _ in range(3)]       # 低桶 3 条
+        + [("strong_bullish", 0.90, "strong_bullish") for _ in range(3)]     # 高桶 3 条
+        + [("bearish", 0.75, "strong_bullish") for _ in range(1)]            # 中桶仅 1 条
+    )
+    llm = _make_calib(store, "eb1", spec)
+    rep = run_eval(llm, store, set_version="eb1")
+    cal = rep["calibration"]
+    assert cal["excluded_buckets"], "样本不足的桶必须被列出"
+    assert cal["excluded_buckets"][0]["bucket"] == "0.70-0.85"
+    assert cal["excluded_buckets"][0]["samples"] == 1
+    # 判定只用两个满桶（都在 1.0），形态为递增
+    assert cal["shape"] == "monotonic_increasing"
+
+
+def test_calibration_cause_is_coverage_gap(store):
+    """高置信误判全落在金标未覆盖档 -> 归因「覆盖缺口」，不是模型标定失准。
+
+    这是 gold-v6 的真实情形：金标缺 strong_*，模型判强档全被记为错，
+    而模型对强档最自信，于是高置信桶塌陷。
+    """
+    # 金标只有 bullish，无 strong_bullish
+    for i in range(6):
+        store.upsert_gold(set_version="cg1", doc_id=f"g{i}", as_of="2026-10-18",
+                          expected_band="bullish", text=TEXT)
+    # 全判 strong_bullish（未覆盖档），高置信
+    llm = FakeLLM([good_response(QUOTE, 0.7, "strong_bullish", 0.9) for _ in range(6)])
+    rep = run_eval(llm, store, set_version="cg1")
+    cause = rep["calibration"]["cause"]
+    assert cause["kind"] == "coverage_gap"
+    assert cause["coverage_gap"] == 6
+    assert cause["miscalibration"] == 0
+    assert "评测表缺档" in cause["note"]
+
+
+def test_calibration_cause_is_miscalibration(store):
+    """金标五档齐全、高置信仍判错 -> 归因「标定失准」。"""
+    for band in ("strong_bullish", "bullish", "neutral", "bearish", "strong_bearish"):
+        store.upsert_gold(set_version="ms1", doc_id=f"m_{band}", as_of="2026-10-18",
+                          expected_band=band, text=TEXT)
+    # 全部高置信地判成 strong_bullish：strong_bullish 那条对，其余四条错
+    llm = FakeLLM([good_response(QUOTE, 0.7, "strong_bullish", 0.9) for _ in range(5)])
+    rep = run_eval(llm, store, set_version="ms1")
+    cause = rep["calibration"]["cause"]
+    assert cause["kind"] == "miscalibration"
+    assert cause["coverage_gap"] == 0
+    assert cause["miscalibration"] == 4
+    assert "失准" in cause["note"]
+
+
+def test_calibration_cause_both(store):
+    """覆盖缺口与标定失准并存时给出各自占比。"""
+    # 金标：bullish / bearish（缺 strong_*）
+    for i in range(3):
+        store.upsert_gold(set_version="bt1", doc_id=f"b{i}", as_of="2026-10-18",
+                          expected_band="bullish", text=TEXT)
+    for i in range(3):
+        store.upsert_gold(set_version="bt1", doc_id=f"c{i}", as_of="2026-10-18",
+                          expected_band="bearish", text=TEXT)
+    # 前三条判 strong_bullish（未覆盖档），后三条判 bullish（覆盖档但错）
+    llm = FakeLLM(
+        [good_response(QUOTE, 0.7, "strong_bullish", 0.9) for _ in range(3)]
+        + [good_response(QUOTE, 0.3, "bullish", 0.9) for _ in range(3)]
+    )
+    rep = run_eval(llm, store, set_version="bt1")
+    cause = rep["calibration"]["cause"]
+    assert cause["kind"] == "both"
+    assert cause["coverage_gap"] == 3
+    assert cause["miscalibration"] == 3
+    assert "50%" in cause["note"]
+
+
+def test_calipers_flags_adjacent_bias_when_coverage_gap(store):
+    """金标有未覆盖档时，±1 档口径必须标明「系统性偏高、不可单独作证据」。"""
+    # 混合：前三条判 bullish（覆盖档、命中），后三条判 strong_bullish（未覆盖档）
+    for i in range(6):
+        store.upsert_gold(set_version="cb1", doc_id=f"q{i}", as_of="2026-10-18",
+                          expected_band="bullish", text=TEXT)
+    llm = FakeLLM(
+        [good_response(QUOTE, 0.3, "bullish", 0.9) for _ in range(3)]
+        + [good_response(QUOTE, 0.7, "strong_bullish", 0.9) for _ in range(3)]
+    )
+    rep = run_eval(llm, store, set_version="cb1")
+    cal = rep["calipers"]
+    assert cal["adjacent_biased_direction"] == "high"
+    assert "系统性偏高" in cal["adjacent_note"]
+    assert "不可单独作为质量证据" in cal["adjacent_note"]
+    assert cal["exact_biased_direction"] == "low"
+    assert "首选口径" in cal["direction_note"]
+
+
+def test_calipers_no_gap_uses_general_note(store):
+    """五档齐全时 ±1 档的提示改为一般性宽松说明，不再说「系统性偏高」。"""
+    for band in ("strong_bullish", "bullish", "neutral", "bearish", "strong_bearish"):
+        store.upsert_gold(set_version="cb2", doc_id=f"r_{band}", as_of="2026-10-18",
+                          expected_band=band, text=TEXT)
+    llm = FakeLLM([
+        good_response(QUOTE, -0.7, "strong_bearish", 0.9),   # r_bearish
+        good_response(QUOTE, -0.3, "bearish", 0.9),          # r_bullish  -> 错
+        good_response(QUOTE, 0.0, "neutral", 0.9),           # r_neutral
+        good_response(QUOTE, -0.7, "strong_bearish", 0.9),   # r_strong_bearish
+        good_response(QUOTE, 0.7, "strong_bullish", 0.9),    # r_strong_bullish
+    ])
+    rep = run_eval(llm, store, set_version="cb2")
+    cal = rep["calipers"]
+    assert cal["adjacent_biased_direction"] == "neutral"
+    assert "系统性偏高" not in cal["adjacent_note"]
+    assert "偏宽松" in cal["adjacent_note"]

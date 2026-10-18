@@ -25,6 +25,12 @@ CONF_BUCKETS = ((0.0, 0.5), (0.5, 0.7), (0.7, 0.85), (0.85, 1.0001))
 # 弱档最小可信样本量：低于此值的档位在报告中标为「样本不足」。
 WEAK_BAND_MIN = 10
 
+# 置信桶最小样本量：低于此值的桶不参与校准判定，但单列不丢弃。
+WEAK_BUCKET_MIN = 3
+
+# 高置信阈值：成因分类时，只看 >= 此值的样本（它们才是"自信却判错"的候选）。
+CALIB_HIGH_CONF = 0.85
+
 # 五档的序数位置与符号，用于 ±1 档与方向两个宽口径。
 _BAND_ORDINAL = {
     "strong_bearish": -2, "bearish": -1, "neutral": 0, "bullish": 1, "strong_bullish": 2,
@@ -34,16 +40,26 @@ _BAND_SIGN = {
 }
 
 
-def _calipers(per_item: list[dict[str, Any]]) -> dict[str, Any]:
-    """三个口径并列：exact / 方向 / ±1 档。
+def _calipers(per_item: list[dict[str, Any]], uncovered: list[str] | None = None) -> dict[str, Any]:
+    """三个口径并列：exact / 方向 / ±1 档，并附各口径的失真方向说明。
 
-    单一口径会误导下游——实测 gold-v6（prompt v3，54 条）上 exact 40.7%、
-    ±1 档 98.1%、方向 79.6%。exact 低估（偏离几乎全在相邻档）、±1 档高估
-    （它把"强度判错"也算对）。所以报告必须三个一起给，让读者自己选口径。
+    单一口径会误导下游。三个口径各有系统性失真：
+
+    - `exact` 在偏离集中于相邻档时**偏低**（强度判错就算全错）。
+    - `±1 档` 在相邻档误判时**偏高**；更严重的是，当金标存在未覆盖档位时，
+      它会把「模型判未覆盖档、金标判相邻档」计为命中——而 exact 那边已经把这些
+      样本单列了。两个口径对同一批样本的处理不一致，±1 档会系统性偏高，
+      所以它不能单独作为质量证据。
+    - 方向口径受档位覆盖缺口影响最小（三分类与金标对齐），是当前首选。
     """
     n = len(per_item)
     if not n:
-        return {"samples": 0, "exact": 0.0, "direction": 0.0, "adjacent": 0.0}
+        return {"samples": 0, "exact": 0.0, "direction": 0.0, "adjacent": 0.0,
+                "exact_biased_direction": "low",
+                "adjacent_biased_direction": "high" if uncovered else "neutral",
+                "exact_note": "无样本",
+                "adjacent_note": "无样本",
+                "direction_note": "无样本"}
     exact = sum(1 for i in per_item if i["hit"])
     direction = sum(
         1 for i in per_item
@@ -54,11 +70,23 @@ def _calipers(per_item: list[dict[str, Any]]) -> dict[str, Any]:
         if i["predicted_band"] in _BAND_ORDINAL and i["expected_band"] in _BAND_ORDINAL
         and abs(_BAND_ORDINAL[i["predicted_band"]] - _BAND_ORDINAL[i["expected_band"]]) <= 1
     )
+    has_gap = bool(uncovered)
+    adjacent_note = (
+        f"受覆盖缺口影响（金标缺 {'、'.join(uncovered)}）：模型判这些档位的样本会被"
+        "算作相邻命中，该口径系统性偏高，不可单独作为质量证据"
+        if has_gap
+        else "相邻档误判计为命中、跨两级才算错，故对「强度判过头」偏宽松"
+    )
     return {
         "samples": n,
         "exact": round(exact / n, 4),
         "direction": round(direction / n, 4),
         "adjacent": round(adjacent / n, 4),
+        "exact_biased_direction": "low",
+        "adjacent_biased_direction": "high" if has_gap else "neutral",
+        "exact_note": "强度档判错即算全错，故对「方向对、强度偏」的情形偏低",
+        "adjacent_note": adjacent_note,
+        "direction_note": "三分类与金标对齐，受档位覆盖缺口影响最小，当前首选口径",
     }
 
 
@@ -198,19 +226,82 @@ def run_eval(
             "accuracy": round(v["hits"] / v["samples"], 4) if v["samples"] else None,
         })
 
-    # 校准失败判定：最高有样本桶的准确率 < 最低有样本桶的准确率
-    populated = [r for r in calib_rows if r["samples"] >= 3 and r["accuracy"] is not None]
+    # 校准判定：桶数 >=3 时检查**整体形态**，而非只比两个端点。
+    # 端点比较在非单调形状上会给出误导性结论——实测 v4 的三桶是
+    # 0.70 / 0.41 / 0.47，最低点在中间，但端点比较只说"高置信不如低置信"。
+    populated = [r for r in calib_rows if r["samples"] >= WEAK_BUCKET_MIN and r["accuracy"] is not None]
+    excluded_buckets = [
+        {"bucket": r["bucket"], "samples": r["samples"], "accuracy": r["accuracy"]}
+        for r in calib_rows
+        if r["samples"] < WEAK_BUCKET_MIN and r["samples"] > 0
+    ]
     calibration_ok = True
-    calibration_note = "样本不足以判定校准（每个置信桶需 ≥3 条）"
+    shape = "insufficient"
+    lowest_bucket = None
+    calibration_note = f"样本不足以判定校准（每个置信桶需 ≥{WEAK_BUCKET_MIN} 条）"
     if len(populated) >= 2:
-        lowest = populated[0]["accuracy"]
-        highest = populated[-1]["accuracy"]
-        calibration_ok = highest >= lowest
-        calibration_note = (
-            f"低置信桶 {populated[0]['bucket']} 准确率 {lowest}，高置信桶 "
-            f"{populated[-1]['bucket']} 准确率 {highest} → "
-            + ("校准正常（高置信更准）" if calibration_ok else "**校准失败**（高置信桶不如低置信桶）")
-        )
+        accs = [r["accuracy"] for r in populated]
+        if len(populated) == 2:
+            # 两桶时端点比较即完整信息
+            calibration_ok = accs[-1] >= accs[0]
+            shape = "monotonic_increasing" if calibration_ok else "monotonic_decreasing"
+        else:
+            up = all(b >= a for a, b in zip(accs, accs[1:]))
+            down = all(b <= a for a, b in zip(accs, accs[1:]))
+            if up:
+                calibration_ok, shape = True, "monotonic_increasing"
+            elif down:
+                calibration_ok, shape = False, "monotonic_decreasing"
+                lowest_bucket = populated[-1]["bucket"]
+            else:
+                # 非单调：指出最低点在哪桶，不能笼统说"高置信不如低置信"
+                calibration_ok = accs[-1] >= accs[0]
+                shape = "non_monotonic"
+                lowest_bucket = min(populated, key=lambda r: r["accuracy"])["bucket"]
+
+        detail = "、".join(f"{r['bucket']}={r['accuracy']}" for r in populated)
+        if shape == "monotonic_increasing":
+            calibration_note = f"校准正常（准确率随置信度单调递增）：{detail}"
+        elif shape == "monotonic_decreasing":
+            calibration_note = f"**校准失败**（准确率随置信度单调递减）：{detail}"
+        else:
+            calibration_note = (
+                f"**非单调**：{detail}；最低点在 {lowest_bucket} 桶。"
+                + ("端点上看高置信仍优于低置信，但中间桶塌陷需单独审视。"
+                   if calibration_ok else "且端点比较亦为高置信不如低置信。")
+            )
+
+    # 成因分类：校准失败的高置信样本，究竟是"落在金标未覆盖档"（评测表缺档）
+    # 还是"在两个都有覆盖的档之间判错"（模型标定失准）。两者处置完全不同：
+    # 前者要补金标，后者才要改 prompt 的 confidence 语义。
+    # gold-v6 缺 strong_* 两档，模型判强档全被记为错、而模型对强档最自信，
+    # 于是"校准失败"其实是覆盖缺口的伪装。
+    cause: dict[str, Any] = {"kind": "unknown", "coverage_gap": 0, "miscalibration": 0,
+                             "note": "金标无覆盖信息，无法区分成因"}
+    all_scored = per_item + coverage_gap_items
+    if coverage:
+        high_conf = [i for i in all_scored if i["confidence"] >= CALIB_HIGH_CONF]
+        gap = sum(1 for i in high_conf if i.get("uncovered_band"))
+        mis = sum(1 for i in high_conf if not i["hit"] and not i.get("uncovered_band"))
+        if not high_conf:
+            cause = {"kind": "no_high_conf", "coverage_gap": 0, "miscalibration": 0,
+                     "note": "没有高置信样本，无从归因"}
+        elif mis == 0 and gap > 0:
+            cause = {"kind": "coverage_gap", "coverage_gap": gap, "miscalibration": 0,
+                     "note": f"高置信误判 {gap} 条全部落在金标未覆盖档位上——"
+                             f"这是评测表缺档，不是模型标定失准。应补金标而非调 prompt"}
+        elif gap == 0 and mis > 0:
+            cause = {"kind": "miscalibration", "coverage_gap": 0, "miscalibration": mis,
+                     "note": f"高置信误判 {mis} 条全部落在金标已覆盖档位之间——"
+                             f"这是模型对自身确定度的估计失准"}
+        elif gap > 0 and mis > 0:
+            total = gap + mis
+            cause = {"kind": "both", "coverage_gap": gap, "miscalibration": mis,
+                     "note": f"高置信误判 {total} 条：{gap} 条来自覆盖缺口"
+                             f"（{gap/total:.0%}）、{mis} 条来自标定失准（{mis/total:.0%}）"}
+        else:
+            cause = {"kind": "none", "coverage_gap": 0, "miscalibration": 0,
+                     "note": "高置信样本无判错，无需归因"}
 
     report = {
         "prompt_version": prompt.version,
@@ -242,8 +333,16 @@ def run_eval(
                 if thin_bands else "各档样本量均达到最低可信门槛"
             ),
         },
-        "calipers": _calipers(per_item),
-        "calibration": {"ok": calibration_ok, "note": calibration_note, "buckets": calib_rows},
+        "calipers": _calipers(per_item, uncovered),
+        "calibration": {
+            "ok": calibration_ok,
+            "shape": shape,
+            "lowest_bucket": lowest_bucket,
+            "note": calibration_note,
+            "buckets": calib_rows,
+            "excluded_buckets": excluded_buckets,
+            "cause": cause,
+        },
         "failures": failures,
         "per_item": per_item,
     }
