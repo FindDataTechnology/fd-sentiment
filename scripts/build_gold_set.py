@@ -81,7 +81,28 @@ def rule_sources() -> list[tuple[str, str, str]]:
         ("公司治理", "neutral", neu),
     ]
 
-STRONG_WORDS = ("大幅", "显著", "重大", "翻倍", "超过", "激增")
+# 强度词。**不含「重大」**：公告开头的法定免责套话「保证本公告内容不存在
+# 任何虚假记载、误导性陈述或者重大遗漏」几乎每份公告都有——实测 gold-v7 的
+# 90 条里 72 条的前 400 字符含这种「重大」，于是这个判据对几乎所有公告恒为真，
+# 任何业绩预减都被标成 strong_bearish（gold-v7 里 bearish 只剩 2 条就是这么来的）。
+# 强度词必须表达**方向 + 强度**，不能是套话里的形容词。
+STRONG_WORDS_BULL = ("大幅增长", "大幅上升", "显著增长", "显著上升", "翻倍", "激增",
+                     "大幅提高", "大幅增加")
+STRONG_WORDS_BEAR = ("大幅下降", "大幅下滑", "大幅亏损", "显著下降", "显著下滑",
+                     "大幅减少", "巨额亏损")
+# 兼容旧调用：任一方向的强度词
+STRONG_WORDS = STRONG_WORDS_BULL + STRONG_WORDS_BEAR
+
+# 法定免责套话：判定强度前必须从正文里剔除，否则「重大」「完整」这类词
+# 会被当成本文自己的强度表述。实测 90 条中 72 条前 400 字含「重大遗漏」。
+BOILERPLATE = (
+    "重大遗漏", "虚假记载", "误导性陈述", "真实、准确、完整", "真实性、准确性和完整性",
+    "准确性、完整性", "连带责任", "连带的法律责任", "敬请广大投资者注意投资风险",
+    "不存在影响本次业绩预告内容准确性", "本公告内容不存在任何",
+    # 财报格式语：出现在几乎每份业绩预告里，不构成本文对利空来源的判断
+    "扣除非经常性损益后的", "扣除非经常性损益事项后", "扣除非经常性损益的",
+)
+
 NEUTRAL_TITLE = ("通知", "章程", "制度", "议事规则", "管理办法", "股东大会", "董事会决议")
 
 # 一次性损益：由这些来源驱动的增长不构成"经营实质改善"，不进强档。
@@ -99,36 +120,122 @@ STRONG_PCT_THRESHOLD = 50.0
 WEAK_BAND_MIN = 10
 
 
-def _max_yoy_pct(text: str) -> float | None:
-    """从正文里取最大同比增幅（百分数）。用于判定是否达到强档的量化锚点。
+def _max_yoy_pct(text: str, direction: str | None = None) -> float | None:
+    """从正文里取最大同比变化幅度（百分数）。
 
-    只认形如「增长 62%」「增加 110% 到 130%」「下降 84.88%」的明确数字；
-    不认无方向修饰的裸百分比（那可能是持股比例、分红率等）。
+    中文公告的同比表述有四种常见写法，缺一种就会漏掉整批样本：
+
+      · 「同比增长 62%」          —— 动词直接接数字（覆盖最多）
+      · 「将增加 88.78 亿元或 124.67%」 —— **金额在前、百分比用「或」引出**
+      · 「增幅约 68%」            —— 名词「增幅」
+      · 「增长 50%以上」          —— 带后缀
+
+    第二种最容易漏：兖矿、紫金这类公告几乎全部用「增加 X 亿元或 Y%」，
+    旧正则只认动词后紧跟数字，实测 50 条 `pct_up` 为空的样本里有多条属于此类。
+
+    `direction` 给出时只取该方向的表述：一份亏损公告正文里常同时写着
+    「营业收入增长 30%」，不区分方向会把利好数字当成利空的强度锚点。
     """
     if not text:
         return None
-    pat = re.compile(
-        r"(?:增长|增加|上升|提高|下滑|下降|减少|亏损)[^0-9%]{0,12}"
-        r"(\d{1,3}(?:\.\d+)?)\s*%"
+    # 先去掉所有空白：PDF 抽取常把词拆到两行（实测「增\n长50%以上」「同比分别下降
+    # 34.3% 和 42.6%」），不归一化会让动词与数字被换行隔断而漏匹配。
+    text = re.sub(r"\s+", "", text)
+    if direction == "up":
+        verbs = r"(?:增长|增加|上升|提高)"
+        nouns = r"(?:增幅|增长幅度|增长率)"
+    elif direction == "down":
+        verbs = r"(?:下滑|下降|减少|降低|亏损)"
+        nouns = r"(?:降幅|下降幅度|减少幅度)"
+    else:
+        verbs = r"(?:增长|增加|上升|提高|下滑|下降|减少|降低|亏损)"
+        nouns = r"(?:增幅|增长幅度|增长率|降幅|下降幅度|减少幅度)"
+
+    pats = (
+        # ① 动词 … X%
+        re.compile(verbs + r"[^0-9%]{0,14}(\d{1,4}(?:\.\d+)?)\s*%"),
+        # ② 「增加/减少 X 亿元或 Y%」：金额在前、百分比由「或」引出。
+        #    必须锚定在同一句的增减动词之后，否则会把「实际税负为 20%」
+        #    「占比为 30.0%」这类非同比数字当成增幅（实测误伤 6 条分红公告）。
+        re.compile(verbs + r"[^。；;]{0,40}?或(?:约)?(\d{1,4}(?:\.\d+)?)%"),
+        # ③ 名词「增幅/降幅 … X%」
+        re.compile(nouns + r"[^0-9%]{0,8}(?:约)?(\d{1,4}(?:\.\d+)?)%"),
     )
     vals = []
-    for m in pat.finditer(text):
-        try:
-            v = float(m.group(1))
-        except ValueError:
-            continue
-        # 500% 以上多半是笔误或非年度口径，不采信为强档依据
-        if 0 < v <= 500:
-            vals.append(v)
+    for pat in pats:
+        for m in pat.finditer(text):
+            try:
+                v = float(m.group(1))
+            except ValueError:
+                continue
+            # 上限放宽到 10000%：真业绩预告里「增加 770%」是常见表述（基数低所致），
+            # 旧上限 500% 会把它当笔误丢掉——而它恰恰是最强的正向数量级。
+            if 0 < v <= 10000:
+                vals.append(v)
     return max(vals) if vals else None
 
 
-def _has_operational_basis(text: str) -> bool:
-    """强档第 ③ 条：理由指向经营实质，且不能只来自一次性损益。"""
+def _strip_boilerplate(text: str) -> str:
+    """剔除法定免责套话。
+
+    **必须在判强度之前做。** 公告开头的「保证本公告内容不存在任何虚假记载、
+    误导性陈述或者重大遗漏」是法定格式，不是本文的情绪表述；不剔除就会让
+    「重大」这个强度词对 80% 的公告恒为真，把所有预减都顶上强档。
+    """
+    if not text:
+        return ""
+    for b in BOILERPLATE:
+        text = text.replace(b, "")
+    return text
+
+
+def _big_loss(text: str) -> bool:
+    """强档条件② 的第三条命中方式：亏损金额绝对值重大（≥5 亿元）。
+
+    prompt v5 的 bands.md 明确列了这一种，但旧标注函数只认「同比 ≥50%」与
+    「强度词」，漏掉了它——于是同样亏 135 亿的两份公告，写法带「下降 84.88%」
+    的判强档，只写「净亏损约 135 亿元」的就判偏档。同一事实因表述不同被标成
+    两个档，这是标注器与 prompt 判据不一致。
+
+    金额有三种写法，都要认：
+      · 净亏损约为 135 亿元                         （「亏损」+ 正数）
+      · 净利润为人民币-102 亿元                     （带负号）
+      · 净利润预计为人民币-7,907 百万元             （百万元口径，需换算）
+    """
     if not text:
         return False
-    has_op = any(s in text for s in OPERATIONAL_SOURCES)
-    one_off_hits = sum(1 for s in ONE_OFF_SOURCES if s in text)
+
+    def _val(s: str, scale: float = 1.0) -> float:
+        try:
+            return float(s.replace(",", "")) * scale
+        except ValueError:
+            return 0.0
+
+    # 带负号的金额（亿元 / 百万元）；百万元 ÷100 换算成亿元
+    for m in re.finditer(r"-([\d,]+(?:\.\d+)?)\s*亿元", text):
+        if _val(m.group(1)) >= 5:
+            return True
+    for m in re.finditer(r"-([\d,]+(?:\.\d+)?)\s*百万元", text):
+        if _val(m.group(1), 0.01) >= 5:
+            return True
+    # 「亏损 … X 亿元」的正数写法
+    for m in re.finditer(r"亏损[^0-9]{0,10}([\d,]+(?:\.\d+)?)\s*亿元", text):
+        if _val(m.group(1)) >= 5:
+            return True
+    return False
+
+
+def _has_operational_basis(text: str) -> bool:
+    """强档第 ③ 条：理由指向经营实质，且不能只来自一次性损益。
+
+    判定前先剔免责套话：「扣除非经常性损益」本身是财报格式语，出现在几乎
+    每份业绩预告里；把它当成"利空来自非经常性项目"会让真正的经营恶化被降档。
+    """
+    if not text:
+        return False
+    clean = _strip_boilerplate(text)
+    has_op = any(s in clean for s in OPERATIONAL_SOURCES)
+    one_off_hits = sum(1 for s in ONE_OFF_SOURCES if s in clean)
     # 只出现一次性损益来源、没有经营实质词 → 不满足 ③
     return has_op or one_off_hits == 0
 
@@ -138,6 +245,11 @@ def label(title: str, category: str, text: str = "") -> str | None:
 
     text 为空时退化为标题判据（向后兼容旧调用），但**正常构建必须传正文**：
     强度档靠正文的量化锚点判，标题只用于识别公告类型与排除事务性公告。
+
+    强度判定只对**业绩预告**做。分红方案、股东大会这类公告的正文里会引用
+    经营背景（「2025 年集团实现净利润…同比增长 1.0%」），那是背景信息不是
+    这份公告自身的信号——按正文判强度会让一份分红方案因为去年利润涨了 1%
+    升到强档。这类公告的方向由规则表直接给定，不参与强度判定。
     """
     for kw in NEUTRAL_TITLE:
         if kw in title:
@@ -151,6 +263,9 @@ def label(title: str, category: str, text: str = "") -> str | None:
             if kw in title:
                 if band not in ("bullish", "bearish"):
                     return band
+                # 只有业绩预告的正文才承载"这份公告自身的量化锚点"
+                if category != "业绩预告":
+                    return band
                 return _strengthen(band, title, text)
     return None
 
@@ -159,12 +274,26 @@ def _strengthen(band: str, title: str, text: str) -> str:
     """偏档 → 强档的三条件判定（与 prompt v5 的强档门槛同源）。
 
     ① 方向明确：由调用方已保证（进了 bullish/bearish 分支）
-    ② 命中量化锚点：正文明示同比 ≥50%，或标题/正文出现强度词
+    ② 命中量化锚点（**三种任一**，与 bands.md 第二条逐项对齐）：
+       - 正文净利/营收同比 ≥50%
+       - 亏损/盈利金额绝对值重大（数亿元量级）
+       - 正文明确出现**该方向**的强度词
     ③ 理由指向经营实质：非一次性损益驱动
+
+    旧实现在这里有两处偏离：
+      · 强度词用「重大」，而它几乎只出现在免责套话里 → 判据恒真
+      · 强度词不分方向（「大幅增长」能命中一份亏损公告）→ 方向与强度脱钩
+      · 漏掉 bands.md 明列的「亏损金额绝对值重大」→ 同额亏损因表述不同而分档
     """
-    pct = _max_yoy_pct(text)
-    anchor_hit = (pct is not None and pct >= STRONG_PCT_THRESHOLD) or any(
-        w in title or w in text[:400] for w in STRONG_WORDS
+    pct = _max_yoy_pct(text, "up" if band == "bullish" else "down")
+    words = STRONG_WORDS_BULL if band == "bullish" else STRONG_WORDS_BEAR
+    # 标题不参与强度词判定：套话已在正文，标题里的「预亏」是方向不是强度；
+    # 且实测标题带"大幅"而正文无锚点的情形会被误判（gold-v6 的 13 条误判源于此）。
+    clean_head = _strip_boilerplate(text[:600])
+    anchor_hit = (
+        (pct is not None and pct >= STRONG_PCT_THRESHOLD)
+        or (band == "bearish" and _big_loss(text))
+        or any(w in clean_head for w in words)
     )
     if not anchor_hit:
         return band
