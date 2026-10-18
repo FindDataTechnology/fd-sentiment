@@ -229,3 +229,27 @@ def test_strong_tier_check_persisted(store):
     # 落库后仍可读回
     again = store.get_score("d1", rec["content_hash"], rec["prompt_version"], rec["model"])
     assert again["strong_tier_check"]["summary"]
+
+
+def test_current_prompt_version_reports_default_and_env_override(monkeypatch):
+    """current_prompt_version 不得引用未定义变量（线上 sha-b38f482 曾报
+    `name 'prompt_version' is not defined`，工具整体不可用）。"""
+    import asyncio
+
+    from fastmcp import Client
+
+    from fd_sentiment.server import build_server
+
+    monkeypatch.setenv("FD_SENTIMENT_PROMPT_VERSION", "v2")
+
+    async def run():
+        app = build_server()
+        async with Client(app) as c:
+            return await c.call_tool("current_prompt_version", {})
+
+    res = asyncio.run(run())
+    payload = res.structured_content or {}
+    assert payload.get("prompt_version") == "v2"
+    assert payload.get("env_override") == "v2"
+    assert "v1" in (payload.get("available_versions") or [])
+    assert payload.get("prompt_digest")

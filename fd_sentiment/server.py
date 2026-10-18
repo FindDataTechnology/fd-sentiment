@@ -136,13 +136,14 @@ model 下的分数**并存不覆盖**（幂等键含版本与模型，故换版�
         本工具只报版本与配置，不产出分数与 evidence_spans（那是打分入口的事，
         evidence 必填与"无证据拒绝"两条纪律见 score_document / score_batch）。"""
         cfg = LLMConfig.from_env()
-        art = load_prompt(prompt_version if prompt_version != "v1" else DEFAULT_PROMPT)
+        art = load_prompt(DEFAULT_PROMPT)
         return {"prompt_version": art.version, "prompt_digest": art.digest,
                 "available_versions": available_versions(), "model": cfg.model,
-                "temperature": cfg.temperature}
+                "temperature": cfg.temperature, "env_override":
+                    os.getenv("FD_SENTIMENT_PROMPT_VERSION")}
 
     @app.tool
-    def run_evaluation(set_version: str, prompt_version: str = "v1") -> dict:
+    def run_evaluation(set_version: str, prompt_version: str | None = None) -> dict:
         """对金标集跑评测：命中率 + 按置信度分桶的准确率（校准）。
 
         高置信桶准确率低于低置信桶即**校准失败**，报告显式标注。
@@ -151,9 +152,11 @@ model 下的分数**并存不覆盖**（幂等键含版本与模型，故换版�
         证据的样本计入 failures 而非命中率分母；样本按 as_of（文档发布日期）组织，
         换 prompt 版本即换一把幂等键，故不同版本的评测结果互不覆盖、可直接对比。
         样本不足时如实标注"不足以判定校准"，不伪造结论。
+        prompt_version 省略时用服务当前默认版本（与 score_document 同一把），
+        避免"评的是 v1、跑的是 v3"这种版本错配。
         """
         store = _store()
-        art = load_prompt(prompt_version)
+        art = load_prompt(prompt_version or DEFAULT_PROMPT)
         return _run_eval(_client(store), store, set_version=set_version, prompt=art)
 
     @app.tool
