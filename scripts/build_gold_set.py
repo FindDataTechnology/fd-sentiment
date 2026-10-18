@@ -95,6 +95,9 @@ OPERATIONAL_SOURCES = ("销量", "销售", "价格", "毛利率", "订单", "产
 # 同比增幅的量化门槛，与 prompt v5 bands.md 的 50% 锚点一致。
 STRONG_PCT_THRESHOLD = 50.0
 
+# 弱档的最小可信样本量：低于此值的档位在报告中标为「样本不足」。
+WEAK_BAND_MIN = 10
+
 
 def _max_yoy_pct(text: str) -> float | None:
     """从正文里取最大同比增幅（百分数）。用于判定是否达到强档的量化锚点。
@@ -264,6 +267,22 @@ def main() -> int:
 
     print(f"\n金标集 {args.set_version}：{added} 条，分布 {counts}")
     print("五档覆盖：" + " ｜ ".join(f"{b}={counts.get(b, 0)}" for b in ALL_BANDS))
+    # 分层统计：金标按**真实公告类型分布**构建，不人为凑均衡（2026-10-19 裁决）。
+    # 理由：业绩预告的法定类型只有预增/预减/预亏/扭亏，增幅中位数就是 54%，
+    # 人为拉平会让金标偏离真实数据分布，评测出来的数不代表实际使用场景。
+    # 代价是弱档样本天然稀少 —— 故报告必须**分层呈现**，弱档单独说明样本量不足。
+    cat_counts: dict[str, dict[str, int]] = {}
+    for r in store.list_gold(args.set_version):
+        cat = (r.get("note") or "?｜?｜?").split("｜")[1]
+        cat_counts.setdefault(cat, {}).setdefault(r["expected_band"], 0)
+        cat_counts[cat][r["expected_band"]] += 1
+    print("\n按类别分层：")
+    for cat, dist in cat_counts.items():
+        total = sum(dist.values())
+        thin = [b for b, n in dist.items() if n < WEAK_BAND_MIN]
+        print(f"  {cat}: n={total} ｜ " + " ".join(f"{b}={n}" for b, n in sorted(dist.items()))
+              + (f"  ← 样本不足档: {'、'.join(thin)}" if thin else ""))
+
     fail = False
     if missing:
         print(f"✗ 档位覆盖不全，缺：{'、'.join(missing)}", file=sys.stderr)
@@ -275,7 +294,11 @@ def main() -> int:
         fail = True
     if fail:
         return 1
-    print("✓ 满足 ≥50 条且五档齐全")
+    thin_bands = [b for b, n in counts.items() if n < WEAK_BAND_MIN]
+    if thin_bands:
+        print(f"⚠ 以下档位样本偏少（<{WEAK_BAND_MIN} 条），该档的评测结论不具统计意义："
+              f"{'、'.join(thin_bands)}", file=sys.stderr)
+    print("✓ 满足 ≥50 条且五档齐全（分布按真实公告类型，非人为均衡）")
     return 0
 
 

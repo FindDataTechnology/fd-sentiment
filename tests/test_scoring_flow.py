@@ -437,3 +437,31 @@ def test_eval_full_coverage_counts_normally(store):
     assert rep["samples_scored"] == 5
     assert rep["hit_rate"] == 1.0
     assert "五档齐全" in rep["coverage"]["note"]
+
+
+def test_eval_reports_per_band_breakdown(store):
+    """分层表必须按期望档位给准确率，并标出样本不足的档。
+
+    金标按真实公告分布构建（不人为均衡），单看总命中率会被最大的一组主导，
+    故必须分层。样本不足的档要明确标出「结论无统计意义」，不能混在总命中率里。
+    """
+    # strong_bullish 12 条（足够），bearish 2 条（不足）
+    for i in range(12):
+        store.upsert_gold(set_version="bd1", doc_id=f"a{i:02d}", as_of="2026-10-18",
+                          expected_band="strong_bullish", text=TEXT)
+    for i in range(2):
+        store.upsert_gold(set_version="bd1", doc_id=f"z{i:02d}", as_of="2026-10-18",
+                          expected_band="bearish", text=TEXT)
+    llm = FakeLLM(
+        [good_response(QUOTE, 0.7, "strong_bullish", 0.9) for _ in range(12)]
+        + [good_response(QUOTE, -0.3, "bearish", 0.7) for _ in range(2)]
+    )
+    rep = run_eval(llm, store, set_version="bd1")
+    rows = {r["expected_band"]: r for r in rep["by_band"]["rows"]}
+    assert rows["strong_bullish"]["samples"] == 12
+    assert rows["strong_bullish"]["enough_samples"] is True
+    assert rows["strong_bullish"]["accuracy"] == 1.0
+    assert rows["bearish"]["samples"] == 2
+    assert rows["bearish"]["enough_samples"] is False
+    assert rep["by_band"]["insufficient"] == ["bearish"]
+    assert "不具统计意义" in rep["by_band"]["note"]

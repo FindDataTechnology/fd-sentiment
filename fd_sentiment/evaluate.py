@@ -22,6 +22,9 @@ from .storage import Store
 
 CONF_BUCKETS = ((0.0, 0.5), (0.5, 0.7), (0.7, 0.85), (0.85, 1.0001))
 
+# 弱档最小可信样本量：低于此值的档位在报告中标为「样本不足」。
+WEAK_BAND_MIN = 10
+
 # 五档的序数位置与符号，用于 ±1 档与方向两个宽口径。
 _BAND_ORDINAL = {
     "strong_bearish": -2, "bearish": -1, "neutral": 0, "bullish": 1, "strong_bullish": 2,
@@ -158,6 +161,27 @@ def run_eval(
 
     hit_rate = round(hits / scored, 4) if scored else 0.0
 
+    # 分层表：按「金标期望档位」分组给准确率。
+    # 金标按真实公告类型分布构建（不人为均衡），故某些档位样本天然稀少；
+    # 单看总命中率会被最大的一组主导（gold-v7 里 strong_bullish 占 53%），
+    # 必须分层才能看出哪些档真的测到了、哪些档的结论无统计意义。
+    by_band: dict[str, dict[str, Any]] = {}
+    for it in per_item:
+        b = by_band.setdefault(it["expected_band"], {"samples": 0, "hits": 0})
+        b["samples"] += 1
+        b["hits"] += 1 if it["hit"] else 0
+    band_rows = []
+    for b in sorted(by_band, key=lambda x: _BAND_ORDINAL.get(x, 99)):
+        v = by_band[b]
+        band_rows.append({
+            "expected_band": b,
+            "samples": v["samples"],
+            "hits": v["hits"],
+            "accuracy": round(v["hits"] / v["samples"], 4) if v["samples"] else None,
+            "enough_samples": v["samples"] >= WEAK_BAND_MIN,
+        })
+    thin_bands = [r["expected_band"] for r in band_rows if not r["enough_samples"]]
+
     # 校准表：每个置信桶的样本数与准确率
     buckets: dict[str, dict[str, Any]] = {}
     for it in per_item:
@@ -210,6 +234,14 @@ def run_eval(
             "excluded_from_exact": len(coverage_gap_items),
         },
         "coverage_gap_items": coverage_gap_items,
+        "by_band": {
+            "rows": band_rows,
+            "insufficient": thin_bands,
+            "note": (
+                f"以下档位样本 <{WEAK_BAND_MIN} 条，其准确率不具统计意义：{'、'.join(thin_bands)}"
+                if thin_bands else "各档样本量均达到最低可信门槛"
+            ),
+        },
         "calipers": _calipers(per_item),
         "calibration": {"ok": calibration_ok, "note": calibration_note, "buckets": calib_rows},
         "failures": failures,
