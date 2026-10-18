@@ -641,3 +641,72 @@ def test_calipers_no_gap_uses_general_note(store):
     assert cal["adjacent_biased_direction"] == "neutral"
     assert "系统性偏高" not in cal["adjacent_note"]
     assert "偏宽松" in cal["adjacent_note"]
+
+
+def test_batch_and_document_use_same_default_prompt(store):
+    """批量入口与单篇入口在不传 prompt 时必须用同一版本。
+
+    实测缺陷：score_batch 没透传 prompt，batch.py 兜底 load_prompt("v1")，
+    于是批量分数全以 v1 落库（生产库 12 条），与单篇入口版本不同。
+    落库的 prompt_version 是幂等键要素，版本分叉等于两批分数不可比。
+    """
+    from fd_sentiment.prompt import default_version
+
+    llm = FakeLLM([good_response(QUOTE), good_response(QUOTE)])
+    r1 = score_document(llm, ScoreRequest("doc-single", TEXT, "2026-10-18"), store=store)
+    out = score_batch(llm, [ScoreRequest("doc-batch", TEXT, "2026-10-18")],
+                      store=store, max_concurrency=1)
+    r2 = out["results"][0]["record"]
+
+    assert r1["prompt_version"] == default_version()
+    assert r2["prompt_version"] == r1["prompt_version"]
+    assert out["prompt_version"] == r1["prompt_version"]
+    assert r1["prompt_version"] != "v1", "缺省不得静默回退到 v1"
+
+
+def test_default_prompt_is_not_historical_version():
+    """服务缺省版本必须等于 DEFAULT_VERSION，不得是硬编码的历史版本。
+
+    实测缺陷：server.py 用 os.getenv(..., "v4") 就地兜底，未设环境变量时
+    对外自称 v4，而 spec 声明的评测口径是 v5。
+    """
+    from fd_sentiment.prompt import DEFAULT_VERSION, default_prompt, default_version
+
+    assert default_version() != "v1"
+    assert default_prompt().version == DEFAULT_VERSION
+    assert DEFAULT_VERSION == "v5", "缺省版本须与 spec 声明的评测口径一致"
+
+
+def test_current_prompt_version_reports_consistency(monkeypatch):
+    """current_prompt_version 必须报出「声明版本 == 实际使用版本」。"""
+    import asyncio
+
+    from fastmcp import Client
+
+    from fd_sentiment.server import build_server
+
+    monkeypatch.delenv("FD_SENTIMENT_PROMPT_VERSION", raising=False)
+
+    async def run():
+        app = build_server()
+        async with Client(app) as c:
+            return await c.call_tool("current_prompt_version", {})
+
+    payload = (asyncio.run(run())).structured_content or {}
+    assert payload.get("declared_matches_actual") is True
+    assert payload.get("prompt_version") == payload.get("default_version")
+    assert payload.get("env_override") is None
+
+
+def test_eval_without_prompt_uses_default_not_v1(store):
+    """评测不传 prompt 时也用服务缺省版本，不得评 v1。"""
+    from fd_sentiment.prompt import default_version
+
+    for band, doc in (("strong_bullish", "e1"), ("neutral", "e2")):
+        store.upsert_gold(set_version="ev1", doc_id=doc, as_of="2026-10-18",
+                          expected_band=band, text=TEXT)
+    llm = FakeLLM([good_response(QUOTE, 0.7, "strong_bullish", 0.9),
+                   good_response(QUOTE, 0.0, "neutral", 0.9)])
+    rep = run_eval(llm, store, set_version="ev1")
+    assert rep["prompt_version"] == default_version()
+    assert rep["prompt_version"] != "v1"

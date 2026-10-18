@@ -13,7 +13,7 @@ from typing import Any, Iterable
 
 from .llm import LLMClient
 from .models import ScoreError
-from .prompt import PromptArtifact, load_prompt
+from .prompt import PromptArtifact, default_prompt
 from .scoring import ScoreRequest, score_document
 
 
@@ -31,7 +31,10 @@ def score_batch(
 
     results 逐条含 doc_id / status(ok|skipped|failed) / 记录或 error。
     """
-    prompt = prompt or load_prompt("v1")
+    # 不传 prompt 时用服务缺省工件（与单篇入口同源），**不回退 v1**。
+    # 兜底到某个历史版本会让批量与单篇落在不同幂等键上，两批分数不可比——
+    # 生产库里的 12 条 v1 分数就是这么来的。
+    prompt = prompt or default_prompt()
     docs = list(docs)
     results: list[dict[str, Any]] = []
     skipped = failed = ok = 0

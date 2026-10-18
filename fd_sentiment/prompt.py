@@ -9,10 +9,17 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
+
+# 服务缺省版本：与 spec 声明的评测口径一致（gold-v7 的评测用的是 v5）。
+# 版本解析集中在此，所有打分入口都走 default_prompt()——不留「不传就回退 v1」
+# 的分叉。实测踩过：score_batch 没透传 prompt，批量分数全以 v1 落库，
+# 与单篇入口版本不同，两批分数在幂等键上分家、统计上不可比。
+DEFAULT_VERSION = "v5"
 
 BANDS_SPEC = """\
 五档定义（band 必须取其中之一，且与 score 的区间一致）：
@@ -142,3 +149,17 @@ def available_versions() -> list[str]:
             if d.is_dir() and (d / "system.md").exists() and d.name not in out:
                 out.append(d.name)
     return out
+
+
+def default_version() -> str:
+    """服务缺省版本：`FD_SENTIMENT_PROMPT_VERSION` 优先，否则 DEFAULT_VERSION。"""
+    return os.getenv("FD_SENTIMENT_PROMPT_VERSION") or DEFAULT_VERSION
+
+
+def default_prompt() -> "PromptArtifact":
+    """所有打分入口共用的缺省工件。
+
+    单篇与批量入口都必须走这里：各自兜底会让两条路径在不同版本上跑，
+    而落库的 prompt_version 是幂等键要素，版本分叉等于两批分数不可比。
+    """
+    return load_prompt(default_version())

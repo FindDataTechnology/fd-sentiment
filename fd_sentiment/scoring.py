@@ -21,7 +21,7 @@ from .llm import LLMClient, LLMError, extract_json_block
 from .models import (
     BANDS, EvidenceSpan, SentimentScore, ScoreError, band_for, locate_quote, validate_score,
 )
-from .prompt import PromptArtifact, load_prompt
+from .prompt import PromptArtifact, default_prompt
 from .sanitize import flatten, wrap_document
 
 # 分块阈值（字符）：推理型模型的输出预算与**输入长度**间接相关（推理量随文本
@@ -259,8 +259,11 @@ def score_document(
     **签名里没有市场数据/上下文参数**——point-in-time 由接口形状保证（spec D7）。
     幂等：同 (doc_id, content_hash, prompt_version, model) 直接返回既有记录，
     不调模型（调用计数可验证）。
+
+    不传 `prompt` 时用服务缺省工件（`prompt.default_prompt()`），不回退到任何
+    历史版本——落库的 `prompt_version` 是幂等键要素，静默换版本会让两批分数不可比。
     """
-    prompt = prompt or load_prompt("v1")
+    prompt = prompt or default_prompt()
     flat = flatten(req.text)
     if not flat:
         raise ScoreError("文档正文为空（flatten 后）")

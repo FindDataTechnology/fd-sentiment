@@ -22,7 +22,7 @@ from .batch import score_batch as _score_batch_impl, requests_from_rows
 from .evaluate import compare_runs as _compare_runs, run_eval as _run_eval
 from .llm import LLMClient, LLMConfig
 from .models import ScoreError
-from .prompt import available_versions, load_prompt
+from .prompt import available_versions, default_prompt, default_version, load_prompt
 from .scoring import ScoreRequest, score_document as _score_document_impl
 from .storage import Store
 
@@ -52,7 +52,9 @@ def build_server() -> FastMCP:
         ),
     )
 
-    DEFAULT_PROMPT = os.getenv("FD_SENTIMENT_PROMPT_VERSION", "v4")
+    # 版本解析只在 prompt.default_prompt() 一处：所有入口共用同一工件。
+    # 曾用 `os.getenv(..., "v4")` 就地兜底，结果对外自称 v4、声明口径却是 v5。
+    DEFAULT_PROMPT = default_prompt()
 
     @app.tool
     def score_document(doc_id: str, text: str, as_of: str, doc_type: str | None = None) -> dict:
@@ -66,7 +68,7 @@ def build_server() -> FastMCP:
         """
         store = _store()
         try:
-            rec = _score_document_impl(_client(store), ScoreRequest(doc_id=doc_id, text=text, as_of=as_of, doc_type=doc_type), store=store, prompt=load_prompt(DEFAULT_PROMPT))
+            rec = _score_document_impl(_client(store), ScoreRequest(doc_id=doc_id, text=text, as_of=as_of, doc_type=doc_type), store=store, prompt=DEFAULT_PROMPT)
             return rec
         except ScoreError as exc:
             return {"error": "refused", "reason": str(exc)}
@@ -84,7 +86,8 @@ def build_server() -> FastMCP:
         """
         store = _store()
         reqs = requests_from_rows(docs)
-        return _score_batch_impl(_client(store), reqs, store=store, max_concurrency=max_concurrency,
+        return _score_batch_impl(_client(store), reqs, store=store, prompt=DEFAULT_PROMPT,
+                            max_concurrency=max_concurrency,
                             per_doc_timeout_s=per_doc_timeout_s, skip_existing=skip_existing)
 
     @app.tool
@@ -134,13 +137,20 @@ model 下的分数**并存不覆盖**（幂等键含版本与模型，故换版�
         prompt_version 与 model 是幂等键四要素之二——换版或换模型都会产生新分数记录
         而非覆盖旧记录（分数记录里的 as_of 是文档发布日期，与本服务版本无关）。
         本工具只报版本与配置，不产出分数与 evidence_spans（那是打分入口的事，
-        evidence 必填与"无证据拒绝"两条纪律见 score_document / score_batch）。"""
+        evidence 必填与"无证据拒绝"两条纪律见 score_document / score_batch）。
+
+        `declared_matches_actual` 是口径一致性自检：本工具报告的版本必须与各打分
+        入口实际使用的版本相同。实测踩过 `DEFAULT_PROMPT` 缺省是 v4、而对外评测
+        声明按 v5 消费——服务自称的版本不是它在跑的版本。"""
         cfg = LLMConfig.from_env()
-        art = load_prompt(DEFAULT_PROMPT)
+        declared = default_version()
+        art = load_prompt(declared)
         return {"prompt_version": art.version, "prompt_digest": art.digest,
                 "available_versions": available_versions(), "model": cfg.model,
-                "temperature": cfg.temperature, "env_override":
-                    os.getenv("FD_SENTIMENT_PROMPT_VERSION")}
+                "temperature": cfg.temperature,
+                "env_override": os.getenv("FD_SENTIMENT_PROMPT_VERSION"),
+                "declared_matches_actual": art.version == DEFAULT_PROMPT.version,
+                "default_version": DEFAULT_PROMPT.version}
 
     @app.tool
     def run_evaluation(
@@ -163,7 +173,7 @@ model 下的分数**并存不覆盖**（幂等键含版本与模型，故换版�
         哪个值，compare_evaluations 会一并呈现。
         """
         store = _store()
-        art = load_prompt(prompt_version or DEFAULT_PROMPT)
+        art = load_prompt(prompt_version) if prompt_version else DEFAULT_PROMPT
         return _run_eval(
             _client(store), store, set_version=set_version, prompt=art,
             concurrency=max(1, int(concurrency)),

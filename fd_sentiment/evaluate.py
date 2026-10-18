@@ -16,7 +16,7 @@ from typing import Any
 
 from .llm import LLMClient
 from .models import ScoreError
-from .prompt import PromptArtifact, load_prompt
+from .prompt import PromptArtifact, default_prompt
 from .scoring import ScoreRequest, score_document
 from .storage import Store
 
@@ -149,7 +149,7 @@ def run_eval(
     并发 4 路时约 250-350s，且失败样本集合与串行不完全相同（超时增多，
     但 reasoning 泄漏不增多——后者由 max_tokens 决定）。
     """
-    prompt = prompt or load_prompt("v1")
+    prompt = prompt or default_prompt()
     gold = store.list_gold(set_version)
     if not gold:
         raise ValueError(f"金标集 {set_version!r} 为空或不存在")
