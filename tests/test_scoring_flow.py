@@ -253,3 +253,48 @@ def test_current_prompt_version_reports_default_and_env_override(monkeypatch):
     assert payload.get("env_override") == "v2"
     assert "v1" in (payload.get("available_versions") or [])
     assert payload.get("prompt_digest")
+
+
+def test_calipers_three_calibers_coexist():
+    """三口径必须并列：exact 低估、±1 档高估，只用其中一个会误导下游。
+
+    夹具按 2026-10-18 gold-v6 满样本实测的**真实配对分布**构造（54 条），
+    见 reports/v3-gold-v6-evaluation-2026-10-18.md。期望值即当时的实测值。
+    """
+    from fd_sentiment.evaluate import _calipers
+
+    # (expected_band, predicted_band) -> 条数，与实测混淆矩阵逐格一致
+    PAIRS = {
+        ("bearish", "bearish"): 4,
+        ("bearish", "strong_bearish"): 8,
+        ("bullish", "bullish"): 2,
+        ("bullish", "neutral"): 8,
+        ("bullish", "strong_bullish"): 13,
+        ("neutral", "bearish"): 2,
+        ("neutral", "neutral"): 16,
+        ("neutral", "strong_bearish"): 1,
+    }
+    items = [
+        {"expected_band": e, "predicted_band": p, "hit": (e == p)}
+        for (e, p), n in PAIRS.items()
+        for _ in range(n)
+    ]
+
+    got = _calipers(items)
+    assert got["samples"] == 54
+    # exact：4 + 2 + 16 = 22
+    assert got["exact"] == round(22 / 54, 4) == 0.4074
+    # 方向（正/中/负）：只有 bullish->neutral(8) 与 neutral->bearish(2) 及
+    # neutral->strong_bearish(1) 方向错，共 11 条错 → 43/54
+    assert got["direction"] == round(43 / 54, 4) == 0.7963
+    # ±1 档：只有 neutral->strong_bearish(1) 跨两级 → 53/54
+    assert got["adjacent"] == round(53 / 54, 4) == 0.9815
+
+
+def test_calipers_empty_is_safe():
+    """空清单不炸（评测全失败时报告仍要能落库）。"""
+    from fd_sentiment.evaluate import _calipers
+
+    got = _calipers([])
+    assert got["samples"] == 0
+    assert got["exact"] == 0.0 and got["direction"] == 0.0 and got["adjacent"] == 0.0

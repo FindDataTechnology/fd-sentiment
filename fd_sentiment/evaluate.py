@@ -21,6 +21,42 @@ from .storage import Store
 
 CONF_BUCKETS = ((0.0, 0.5), (0.5, 0.7), (0.7, 0.85), (0.85, 1.0001))
 
+# 五档的序数位置与符号，用于 ±1 档与方向两个宽口径。
+_BAND_ORDINAL = {
+    "strong_bearish": -2, "bearish": -1, "neutral": 0, "bullish": 1, "strong_bullish": 2,
+}
+_BAND_SIGN = {
+    "strong_bearish": -1, "bearish": -1, "neutral": 0, "bullish": 1, "strong_bullish": 1,
+}
+
+
+def _calipers(per_item: list[dict[str, Any]]) -> dict[str, Any]:
+    """三个口径并列：exact / 方向 / ±1 档。
+
+    单一口径会误导下游——实测 gold-v6（prompt v3，54 条）上 exact 40.7%、
+    ±1 档 98.1%、方向 79.6%。exact 低估（偏离几乎全在相邻档）、±1 档高估
+    （它把"强度判错"也算对）。所以报告必须三个一起给，让读者自己选口径。
+    """
+    n = len(per_item)
+    if not n:
+        return {"samples": 0, "exact": 0.0, "direction": 0.0, "adjacent": 0.0}
+    exact = sum(1 for i in per_item if i["hit"])
+    direction = sum(
+        1 for i in per_item
+        if _BAND_SIGN.get(i["predicted_band"]) == _BAND_SIGN.get(i["expected_band"])
+    )
+    adjacent = sum(
+        1 for i in per_item
+        if i["predicted_band"] in _BAND_ORDINAL and i["expected_band"] in _BAND_ORDINAL
+        and abs(_BAND_ORDINAL[i["predicted_band"]] - _BAND_ORDINAL[i["expected_band"]]) <= 1
+    )
+    return {
+        "samples": n,
+        "exact": round(exact / n, 4),
+        "direction": round(direction / n, 4),
+        "adjacent": round(adjacent / n, 4),
+    }
+
 
 def _bucket(conf: float) -> str:
     for lo, hi in CONF_BUCKETS:
@@ -115,6 +151,7 @@ def run_eval(
         "samples_scored": scored,
         "hits": hits,
         "hit_rate": hit_rate,
+        "calipers": _calipers(per_item),
         "calibration": {"ok": calibration_ok, "note": calibration_note, "buckets": calib_rows},
         "failures": failures,
         "per_item": per_item,
