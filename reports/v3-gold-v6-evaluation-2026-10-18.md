@@ -135,6 +135,29 @@ LLMError: 模型输出中没有可解析的 JSON 对象：'We need answer JSON o
 
 幂等复跑已验证：对同一 `(doc_id, content_hash, prompt_version, model)` 重跑返回 `created=False`、`scores` 计数 59→59 不变，未重复调用模型。
 
+## 七之三、生产失败率高于本地的真因（2026-10-18 定位并修）
+
+生产 43/60、本地 54/60，差的 11 条曾经让我怀疑并发。**不是并发，是 Deployment 里的一条 env**：
+
+```yaml
+- name: FD_SENTIMENT_MAX_TOKENS
+  value: "16000"        # 覆盖了代码里已改成 32000 的默认值
+```
+
+`LLMConfig.from_env()` 优先读环境变量，所以镜像里 `max_tokens: int = 32000` 的默认值在生产**从未生效**。16000 正是我对照实验里「8 条中 1 条只剩 `reasoning_content`、content 空」的那一档。
+
+已改 `fd-infra-deploy/all-services/prod/fd-sentiment.yaml` 为 `32000`（commit `4c646d8`），Pod 内实测 `env=32000 / effective=32000`。
+
+**这条比镜像本身更值得记**：我上一轮把生产失败率归给并发，只做了「串行 vs 并发」对照就下了结论——那个对照只证明「并发不导致 reasoning 泄漏」，**没有证明「生产还有别的因素」**。真正的定位来自去读 Deployment 的 env 清单。
+
+## 七之四、部署通道（踩过的坑，写给下一次）
+
+`fd-prod` 命名空间由 **ArgoCD application `all-services-prod`** 管理，`syncPolicy.automated.selfHeal=true`。因此：
+
+- `kubectl set image` / `kubectl edit` **会被自动改回**（实测 4 秒内 pod 被删、镜像回退到旧 sha）。
+- 正确做法：改 `fd-infra-deploy/all-services/prod/<service>.yaml` → push → 必要时 `kubectl -n argocd annotate application all-services-prod argocd.argoproj.io/refresh=normal --overwrite` 催一次。
+- `tcr-relay` 的 `seen-tags` 账本记录可信，但**要等它跑完那一轮**（cron 5 分钟）再查镜像。我在 20:5x 查 ccr 时 `sha-360c316` 还没到，20:58:56 才拷贝成功——早查会误判成「丢失」。
+
 ## 八、复现方式
 
 ```bash
