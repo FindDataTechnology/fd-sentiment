@@ -207,6 +207,33 @@ def check_unsurfaced_ok() -> list[str]:
     if not any(victim in d for d in diff):
         return [f"反向自检失败：摘掉 {victim} 后方向 1 未报出该工具（脚本形同虚设）"]
     return []
+def check_output_structure(m: dict, declared: dict[str, str]) -> list[str]:
+    """输出结构状态必须显式登记（mcp-result-contract「无静默空缺」）。
+
+    本服务尚未逐工具声明输出结构（返回形状随输入变化，需先固化契约），故
+    manifest 里登记为 `undeclared`。这条检查保证：新增工具时不会出现"既没声明、
+    也没登记为未声明"的静默空缺——那种工具在客户端看来与已声明工具无从区分。
+
+    日后某工具真的挂上 output_schema 时，本检查会失败并提示把它移进 declared：
+    登记状态与运行时事实必须一致，不能靠记忆维护。
+    """
+    block = m.get("output_structure")
+    if not isinstance(block, dict):
+        return ["manifest 缺 output_structure（输出结构状态须显式可见）"]
+    dec = set(block.get("declared") or [])
+    und = set(block.get("undeclared") or [])
+    problems: list[str] = []
+    both = sorted(dec & und)
+    if both:
+        problems.append(f"同时出现在 declared 与 undeclared：{both}")
+    silent = sorted(set(declared) - dec - und)
+    if silent:
+        problems.append(f"既未声明也未登记为未声明（静默空缺）：{silent}")
+    stray = sorted((dec | und) - set(declared))
+    if stray:
+        problems.append(f"output_structure 登记了未上牌的工具：{stray}")
+    return problems
+
 
 
 def main() -> int:
@@ -218,6 +245,7 @@ def main() -> int:
     problems = check_shape(m)
     problems += check_runtime_agreement(m)
     problems += check_annotations(m)
+    problems += check_output_structure(m, manifest_tools(m))
     if args.consumers:
         problems += check_consumers(m, args.consumers)
     problems += check_unsurfaced_ok()

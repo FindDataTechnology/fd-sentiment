@@ -58,6 +58,20 @@
       "openWorldHint": false
     }
   },
+  "output_structure": {
+    "declared": [],
+    "undeclared": [
+      "aggregate_scores",
+      "compare_evaluations",
+      "current_prompt_version",
+      "get_score",
+      "list_scores",
+      "run_evaluation",
+      "score_batch",
+      "score_document"
+    ],
+    "note": "未声明输出结构（已知缺口）。原因：本服务的返回形状随输入变化较大（过滤参数、可选字段、上游缺省），逐工具声明需先固化契约，排在 mcp-protocol-hardening 组 2 之后的迭代。清单显式登记此状态，使客户端不会把「未声明」误读为「无结构」。"
+  },
   "tool_groups": [
     {
       "group": "scoring",
