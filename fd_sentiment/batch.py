@@ -26,16 +26,28 @@ def score_batch(
     max_concurrency: int = 4,
     per_doc_timeout_s: float = 180.0,
     skip_existing: bool = True,
+    task_store=None,
+    task_id: str | None = None,
 ) -> dict[str, Any]:
-    """批量打分。返回 {results, skipped, failed, ok, total}。
+    """批量打分。返回 {results, skipped, failed, ok, total, task_id}。
 
     results 逐条含 doc_id / status(ok|skipped|failed) / 记录或 error。
+
+    传入 `task_store` 时，每条结果同步落到任务表（`tasks.py`），使进度可被
+    查询、失败项可单独重试、重启后状态仍可读（mcp-long-running-operations）。
+    不传则保持纯内存行为，离线测试与嵌入式调用不受影响。
     """
     # 不传 prompt 时用服务缺省工件（与单篇入口同源），**不回退 v1**。
     # 兜底到某个历史版本会让批量与单篇落在不同幂等键上，两批分数不可比——
     # 生产库里的 12 条 v1 分数就是这么来的。
     prompt = prompt or default_prompt()
     docs = list(docs)
+    if task_store is not None and task_id is None:
+        task_id = task_store.create(
+            "score_batch", [d.doc_id for d in docs],
+            meta={"prompt_version": prompt.version, "model": client.cfg.model})
+    if task_store is not None and task_id is not None:
+        task_store.mark_running(task_id)
     results: list[dict[str, Any]] = []
     skipped = failed = ok = 0
 
@@ -70,8 +82,15 @@ def score_batch(
             else:
                 failed += 1
             results.append(r)
+            if task_store is not None and task_id is not None:
+                # skipped 记为 ok：它确实是被处理过的（幂等命中），重试时不该
+                # 再跑一次——"已成功条目不得因重试被重复处理"包含这种情形。
+                task_store.record_item(
+                    task_id, r["doc_id"],
+                    "ok" if r["status"] in ("ok", "skipped") else "failed",
+                    result=r.get("record"), error=r.get("error"))
 
-    return {
+    out = {
         "total": len(docs),
         "ok": ok,
         "skipped": skipped,
@@ -80,6 +99,11 @@ def score_batch(
         "prompt_version": prompt.version,
         "model": client.cfg.model,
     }
+    if task_store is not None and task_id is not None:
+        task_store.finish(task_id, "failed" if failed else "completed",
+                          error=f"{failed} 条失败" if failed else None)
+        out["task_id"] = task_id
+    return out
 
 
 def requests_from_rows(rows: Iterable[dict[str, Any]]) -> list[ScoreRequest]:

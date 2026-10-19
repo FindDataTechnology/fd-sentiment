@@ -27,6 +27,15 @@ BAND_ZH = {
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
+class NotFoundError(ValueError):
+    """任务或记录不存在：查询合法但无此标识。
+
+    独立类型而不是 ScoreError 的子类：两者语义不同——ScoreError 是"这份文本
+    打不出分"，NotFoundError 是"这个 id 从未提交过"，调用方处置完全不同
+    （前者改输入，后者改 id 或确认是否记错）。
+    """
+
+
 class ScoreError(ValueError):
     """分数不合法（形状/取值/证据）。调用方据此拒绝该次打分。"""
 

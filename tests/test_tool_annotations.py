@@ -24,12 +24,12 @@ from fd_sentiment.surface import TOOLS
 
 HINTS = ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")
 
-#: 写持久状态的工具（分数落 SQLite / 评测报告落库）。
+#: 写持久状态的工具（分数落 SQLite / 评测报告落库 / 改写任务表）。
 #: 这是**期望**而非实现派生值——正是它让"实现改了而声明没改"能被检出。
-WRITES_STATE = {"score_document", "score_batch", "run_evaluation"}
+WRITES_STATE = {"score_document", "score_batch", "run_evaluation", "retry_failed"}
 
-#: 调用期会出网（LLM 网关）。
-TOUCHES_NETWORK = {"score_document", "score_batch", "run_evaluation"}
+#: 调用期会出网（LLM 网关）。get_task_status 只读本地任务表，不出网。
+TOUCHES_NETWORK = {"score_document", "score_batch", "run_evaluation", "retry_failed"}
 
 
 @pytest.fixture(scope="module")
@@ -93,8 +93,10 @@ def test_no_tool_is_marked_destructive(runtime_annotations):
 
 
 def test_same_family_shares_identical_attributes(runtime_annotations):
-    """查询族（get_score / list_scores / aggregate_scores / compare_evaluations）同属性。"""
-    family = ["get_score", "list_scores", "aggregate_scores", "compare_evaluations"]
+    """只读查询族（get_score / list_scores / aggregate_scores / compare_evaluations /
+    current_prompt_version / get_task_status）同属性。"""
+    family = ["get_score", "list_scores", "aggregate_scores", "compare_evaluations",
+              "current_prompt_version", "get_task_status"]
     first = runtime_annotations[family[0]]
     for name in family[1:]:
         assert runtime_annotations[name] == first, f"{name} 与同族属性不一致"

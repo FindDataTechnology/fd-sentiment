@@ -21,6 +21,18 @@
       "idempotentHint": false,
       "openWorldHint": true
     },
+    "get_task_status": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "retry_failed": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
     "get_score": {
       "readOnlyHint": true,
       "destructiveHint": false,
@@ -65,7 +77,9 @@
       "compare_evaluations",
       "current_prompt_version",
       "get_score",
+      "get_task_status",
       "list_scores",
+      "retry_failed",
       "run_evaluation",
       "score_batch",
       "score_document"
@@ -115,9 +129,18 @@
         "compare_evaluations"
       ],
       "description": "金标评测与版本对比（有状态：结果落 eval_runs）。输出命中率 + 按置信度分桶的准确率表；高置信桶低于低置信桶即**校准失败**并显式标注。金标集按 set_version 版本化。"
+    },
+    {
+      "group": "task",
+      "level": "commercial",
+      "tools": [
+        "get_task_status",
+        "retry_failed"
+      ],
+      "description": "长任务原语（mcp-long-running-operations）：get_task_status 查进度与逐条结果（只读），retry_failed 只重跑失败/未处理条目。任务状态落 SQLite，服务重启后仍可查询——被打断的任务报 interrupted 并说明已完成的条目仍有效，而不是「未知任务」。"
     }
   ],
   "registry": {
-    "expected_tool_count": 8
+    "expected_tool_count": 10
   }
 }

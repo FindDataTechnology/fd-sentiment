@@ -23,11 +23,12 @@ from .evaluate import compare_runs as _compare_runs, run_eval as _run_eval
 from . import errors as E
 from .error_mapping import map_errors
 from .llm import LLMClient, LLMConfig
-from .models import ScoreError
+from .models import NotFoundError, ScoreError
 from .prompt import available_versions, default_prompt, default_version, load_prompt
 from .scoring import ScoreRequest, score_document as _score_document_impl
 from .surface import annotations_for
 from .storage import Store
+from .tasks import TaskStore
 
 SERVER_NAME = "fd-sentiment"
 
@@ -36,6 +37,11 @@ DEFAULT_DB = os.getenv("FD_SENTIMENT_DB", str(Path.cwd() / "fd_sentiment.db"))
 
 def _store() -> Store:
     return Store(DEFAULT_DB)
+
+
+def _task_store() -> TaskStore:
+    """任务表与分数库同一文件：一个 SQLite 连接串就够，不需要第二套配置。"""
+    return TaskStore(DEFAULT_DB)
 
 
 def _client(store: Store | None = None) -> LLMClient:
@@ -87,13 +93,77 @@ def build_server() -> FastMCP:
         幂等键 (doc_id, content_hash, prompt_version, model)，与单条入口同一把钥匙。
         每条成功记录同样含 as_of（文档发布日期）与 evidence_spans（非空、quote 为
         原文逐字子串）；无证据的文档计入 failed，不返回空证据分数。
-        返回 {total, ok, skipped, failed, results, prompt_version, model}。
+        返回 {total, ok, skipped, failed, results, prompt_version, model, task_id}。
+
+        task_id 是任务句柄（mcp-long-running-operations）：用它调 get_task_status
+        查进度与逐条结果，调 retry_failed 只重跑失败项。任务状态落 SQLite，
+        服务重启后仍可查询（被中断的任务标为 interrupted 而非"未知任务"）。
         """
         store = _store()
         reqs = requests_from_rows(docs)
         return _score_batch_impl(_client(store), reqs, store=store, prompt=DEFAULT_PROMPT,
                             max_concurrency=max_concurrency,
-                            per_doc_timeout_s=per_doc_timeout_s, skip_existing=skip_existing)
+                            per_doc_timeout_s=per_doc_timeout_s, skip_existing=skip_existing,
+                            task_store=_task_store())
+
+
+    @app.tool(annotations=annotations_for("get_task_status"))
+    @map_errors
+    def get_task_status(task_id: str, item_status: str | None = None) -> dict:
+        """查询批量任务的进度与逐条结果（mcp-long-running-operations）。
+
+        返回 status（queued | running | completed | failed | interrupted）、
+        progress（"已处理/总数"）、counts（pending / ok / failed）、
+        以及逐条结果（item_status 可筛 ok / failed / pending）。
+
+        `interrupted` 表示服务重启打断了任务——已完成的条目结果仍然有效，
+        用 retry_failed 只补未完成的条目。它**不**是"未知任务"：从未提交过的
+        task_id 才会返回 not_found。
+
+        进度只增不减（processed 由条目状态重算而非自增），故"processed 长时间
+        不变"是判断卡住的可靠信号。
+        """
+        info = _task_store().status(task_id)
+        if info is None:
+            raise NotFoundError(f"task_id={task_id!r} 从未提交过")
+        if item_status:
+            info["items"] = _task_store().items(task_id, item_status)
+        return info
+
+    @app.tool(annotations=annotations_for("retry_failed"))
+    @map_errors
+    def retry_failed(task_id: str, docs: list[dict], max_concurrency: int = 4,
+                     per_doc_timeout_s: float = 180.0) -> dict:
+        """只重跑某任务中失败/未处理的条目（已成功条目不重复处理）。
+
+        docs 需包含这些条目的原文（服务不存原文，只存分数与证据）——但**只处理
+        task_id 里状态为 failed 或 pending 的那些 doc_id**，其余条目即使出现在
+        docs 里也会被跳过并在返回中说明。这条限制是"不重复计费"的实现点：
+        调用方传全量文档也不会让已成功的条目再调一次模型。
+
+        返回 {task_id, retried, skipped_already_ok, results, ...}，
+        重试后任务状态更新为 completed 或 failed。
+        """
+        tstore = _task_store()
+        info = tstore.status(task_id)
+        if info is None:
+            raise NotFoundError(f"task_id={task_id!r} 从未提交过")
+        wanted = set(tstore.failed_keys(task_id))
+        reqs_all = requests_from_rows(docs)
+        reqs = [r for r in reqs_all if r.doc_id in wanted]
+        skipped = [r.doc_id for r in reqs_all if r.doc_id not in wanted]
+        if not reqs:
+            return {"task_id": task_id, "retried": 0,
+                    "skipped_already_ok": len(skipped), "results": [],
+                    "note": "该任务没有失败或未处理的条目，未发出任何调用。"}
+        store = _store()
+        out = _score_batch_impl(_client(store), reqs, store=store, prompt=DEFAULT_PROMPT,
+                                max_concurrency=max_concurrency,
+                                per_doc_timeout_s=per_doc_timeout_s,
+                                skip_existing=True, task_store=tstore, task_id=task_id)
+        out["task_id"] = task_id
+        out["skipped_already_ok"] = len(skipped)
+        return out
 
     @app.tool(annotations=annotations_for("get_score"))
     @map_errors
@@ -212,6 +282,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.version:
         print(__version__)
         return 0
+    # 启动即把上一茬进程留下的"进行中"任务标为 interrupted（mcp-long-running-operations）。
+    # 不做这一步，那些任务会永远停在 running，调用方看到的是一个不动的进度条，
+    # 而实际上已经没人再推进它了。
+    try:
+        n = _task_store().mark_interrupted_stale()
+        if n:
+            print(f"[fd-sentiment] {n} 个未完成任务因重启标为 interrupted",
+                  file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001 — 启动不该因任务表不可用而失败
+        print(f"[fd-sentiment] 任务表不可用，跳过中断标记：{exc}", file=sys.stderr)
     app = build_server()
     if args.http:
         _start_health_server(app, args.http)

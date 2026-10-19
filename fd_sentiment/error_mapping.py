@@ -10,6 +10,7 @@ fastmcp 捕获后包成一段文本、`structuredContent` 为空——调用方�
 |---|---|---|
 | `LLMError` | `upstream_unavailable` | 可重试（网关 503 / 超时） |
 | `ScoreError`（拒答/证据不成立） | `invalid_input` | 换文档或补证据，重试无用 |
+| `NotFoundError`（任务/记录从未提交） | `not_found` | 改 id 或确认记错 |
 | `ValueError`（金标集不存在等） | `invalid_input` | 改参数 |
 | `sqlite3.OperationalError` / `OSError` | `upstream_unavailable` | 本地库不可用，可重试 |
 
@@ -25,15 +26,17 @@ import functools
 import sqlite3
 from typing import Any, Callable
 
-from .errors import INVALID_INPUT, UPSTREAM_UNAVAILABLE, error_result
+from .errors import INVALID_INPUT, NOT_FOUND, UPSTREAM_UNAVAILABLE, error_result
 
 
 def _classify(exc: BaseException) -> tuple[str, str, dict[str, Any]] | None:
     from .llm import LLMError
-    from .models import ScoreError
+    from .models import NotFoundError, ScoreError
 
     if isinstance(exc, LLMError):
         return UPSTREAM_UNAVAILABLE, str(exc), {"upstream": "llm_gateway"}
+    if isinstance(exc, NotFoundError):
+        return NOT_FOUND, str(exc), {}
     if isinstance(exc, ScoreError):
         return INVALID_INPUT, str(exc), {"reason": "refused_or_unevidenced"}
     if isinstance(exc, ValueError):
