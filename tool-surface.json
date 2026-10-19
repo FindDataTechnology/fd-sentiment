@@ -8,6 +8,56 @@
   ],
   "description": "fd-sentiment 文档情绪打分服务，8 工具五组：打分 / 查询 / 聚合 / 元信息 / 评测。分数可验证（evidence_spans 必填、quote 为原文逐字子串、偏移由服务定位修正）、可复现（prompt 版本 + 模型 + 幂等键 (doc_id, content_hash, prompt_version, model)，重复请求不重复调用模型）、可评测（金标命中率 + 置信度校准，校准失败显式标注）。聚合视图是分布统计，**不是情绪指数**。服务不取市场数据（point-in-time 由接口形状保证），唯一外部依赖是 LLM 网关（OpenAI 兼容，低温）。",
   "skills_eligible_for_packs": [],
+  "tool_annotations": {
+    "score_document": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "score_batch": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "get_score": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "list_scores": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "aggregate_scores": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "current_prompt_version": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "run_evaluation": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "compare_evaluations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
   "tool_groups": [
     {
       "group": "scoring",

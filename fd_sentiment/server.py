@@ -24,6 +24,7 @@ from .llm import LLMClient, LLMConfig
 from .models import ScoreError
 from .prompt import available_versions, default_prompt, default_version, load_prompt
 from .scoring import ScoreRequest, score_document as _score_document_impl
+from .surface import annotations_for
 from .storage import Store
 
 SERVER_NAME = "fd-sentiment"
@@ -56,7 +57,7 @@ def build_server() -> FastMCP:
     # 曾用 `os.getenv(..., "v4")` 就地兜底，结果对外自称 v4、声明口径却是 v5。
     DEFAULT_PROMPT = default_prompt()
 
-    @app.tool
+    @app.tool(annotations=annotations_for("score_document"))
     def score_document(doc_id: str, text: str, as_of: str, doc_type: str | None = None) -> dict:
         """对单篇文档打分。
 
@@ -73,7 +74,7 @@ def build_server() -> FastMCP:
         except ScoreError as exc:
             return {"error": "refused", "reason": str(exc)}
 
-    @app.tool
+    @app.tool(annotations=annotations_for("score_batch"))
     def score_batch(docs: list[dict], max_concurrency: int = 4, per_doc_timeout_s: float = 180.0, skip_existing: bool = True) -> dict:
         """批量打分。docs 为 [{doc_id, text, as_of, doc_type?}] 列表。
 
@@ -90,7 +91,7 @@ def build_server() -> FastMCP:
                             max_concurrency=max_concurrency,
                             per_doc_timeout_s=per_doc_timeout_s, skip_existing=skip_existing)
 
-    @app.tool
+    @app.tool(annotations=annotations_for("get_score"))
     def get_score(doc_id: str, prompt_version: str | None = None) -> dict:
         """按 doc_id 取最近一条分数（可按 prompt_version 过滤）。
 
@@ -101,7 +102,7 @@ def build_server() -> FastMCP:
         rows = store.list_scores(doc_id=doc_id, prompt_version=prompt_version, limit=1)
         return rows[0] if rows else {"found": False, "doc_id": doc_id}
 
-    @app.tool
+    @app.tool(annotations=annotations_for("list_scores"))
     def list_scores(doc_id: str | None = None, prompt_version: str | None = None,
                     since: str | None = None, until: str | None = None, limit: int = 200) -> dict:
         """列分数记录（可按 doc_id / prompt_version / since / until 过滤）。返回 {count, items}。
@@ -114,7 +115,7 @@ model 下的分数**并存不覆盖**（幂等键含版本与模型，故换版�
                                  since=since, until=until, limit=limit)
         return {"count": len(rows), "items": rows}
 
-    @app.tool
+    @app.tool(annotations=annotations_for("aggregate_scores"))
     def aggregate_scores(since: str | None = None, until: str | None = None,
                          doc_type: str | None = None, prompt_version: str | None = None,
                          universe_total: int | None = None) -> dict:
@@ -129,7 +130,7 @@ model 下的分数**并存不覆盖**（幂等键含版本与模型，故换版�
         return _aggregate(_store(), since=since, until=until, doc_type=doc_type,
                           prompt_version=prompt_version, universe_total=universe_total)
 
-    @app.tool
+    @app.tool(annotations=annotations_for("current_prompt_version"))
     def current_prompt_version() -> dict:
         """查询当前 prompt 版本与模型配置（与分数记录中的 prompt_version / model 字段一致）。
 
@@ -152,7 +153,7 @@ model 下的分数**并存不覆盖**（幂等键含版本与模型，故换版�
                 "declared_matches_actual": art.version == DEFAULT_PROMPT.version,
                 "default_version": DEFAULT_PROMPT.version}
 
-    @app.tool
+    @app.tool(annotations=annotations_for("run_evaluation"))
     def run_evaluation(
         set_version: str, prompt_version: str | None = None, concurrency: int = 1
     ) -> dict:
@@ -179,7 +180,7 @@ model 下的分数**并存不覆盖**（幂等键含版本与模型，故换版�
             concurrency=max(1, int(concurrency)),
         )
 
-    @app.tool
+    @app.tool(annotations=annotations_for("compare_evaluations"))
     def compare_evaluations(run_ids: list[str]) -> dict:
         """并列对比多个评测结果（prompt 版本 / 模型对比用）。返回 {runs: [...]}。
 
