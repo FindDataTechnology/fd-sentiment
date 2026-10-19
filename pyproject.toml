@@ -10,7 +10,7 @@ dependencies = [
 # 传输层单列：核心打分/存储/评测只依赖标准库 + httpx（调 LLM 网关），
 # 离线回归与嵌入其他进程时不必装 fastmcp。只有 MCP 入口需要它。
 [project.optional-dependencies]
-server = ["fastmcp>=2.0"]
+server = ["fastmcp>=3.4,<4"]
 test = ["pytest>=7.4"]
 
 [build-system]
