@@ -74,6 +74,17 @@ RULES: list[tuple[str, tuple[str, ...], str]] = [
     ("董事会", (), "neutral"),
     ("监事会", (), "neutral"),
     ("公司治理", (), "neutral"),
+    # [非业绩预告判据] 股东/董监高减持：只有「拟减持」改变前瞻预期（未来供给
+    # 增加，一般性利空）；「实施/完成/结果/进展/届满」是既定计划的执行回执，
+    # 无新信息；「承诺不减持」是无方向承诺。标题层面就能分，见 _reduce_band。
+    ("股权变动", ("减持",), "__reduce__"),
+    # [非业绩预告判据] 补充更正类里三类：
+    #   业绩预告（含更正/修正/补充）→ 正文结构与业绩预告一致，按同比判方向；
+    #   涉及诉讼/仲裁 → 或有负债，方向负面但金额与结果不确定，不进强档；
+    #   其余（年报更正、章程修订等）→ 事务性，中性。
+    ("补充更正", ("业绩预告",), "__trend__"),
+    ("补充更正", ("涉及诉讼", "涉及仲裁"), "bearish"),
+    ("补充更正", (), "neutral"),
 ]
 
 # 亏损收窄幅度达到此比例才认定「显著改善」。低于它（含小幅扩大/基本持平）
@@ -95,6 +106,7 @@ def rule_sources() -> list[tuple[str, str, str]]:
     return [
         ("业绩预告/预增类", "bullish→_strengthen", src),
         ("业绩预告/预减类", "bearish→_strengthen", src),
+        ("业绩预告/预盈类", "__trend__（扭亏需金额 ≥5 亿才进强档）", src),
         ("风险提示/退市类", "strong_bearish", src),
         ("风险提示/诉讼类", "bearish", neu),
         ("风险提示/异常波动", "neutral", neu),
@@ -104,6 +116,10 @@ def rule_sources() -> list[tuple[str, str, str]]:
         ("董事会", "neutral", neu),
         ("监事会", "neutral", neu),
         ("公司治理", "neutral", neu),
+        ("股权变动/减持", "__reduce__（拟减持 bearish；执行回执 neutral）", neu),
+        ("补充更正/业绩预告", "__trend__（方向按同比，不按标题）", src),
+        ("补充更正/涉及诉讼", "bearish（或有负债，不进强档）", neu),
+        ("补充更正/其他", "neutral", neu),
     ]
 
 # 强度词。**不含「重大」**：公告开头的法定免责套话「保证本公告内容不存在
@@ -508,12 +524,21 @@ def _trend_band(text: str, fallback: str = "bearish") -> str:
     已经把方向说清楚了，不需要数字也能判——这比按标题回退可靠。实测中石化
     2021Q1/H1 的预盈公告只写本期金额、不列上年数值，旧码退回标题判成 bullish，
     而正文写明扭亏为盈，按 prompt v6 的同比方向表应是 strong_bullish。
+
+    但**扭亏为盈的强档自 prompt v7 起需过金额门槛**（上年同期亏损 ≥5 亿元 或
+    本期盈利 ≥5 亿元）。没有数字就证明不了金额重大，按「拿不准取温和」退回
+    bullish——这不是回退到标题方向，是回退到未达强档的正面档。
     """
     cur, prev = _period_amounts(text)
     if cur is None or prev is None:
         flat = re.sub(r"\s+", "", text)
         if "扭亏为盈" in flat:
-            return "strong_bullish"
+            # prompt v7：扭亏进强档需金额重大。上年数值缺失时，本期盈利本身
+            # 也能证明金额重大（如中石化 2021Q1 只写本期 160–180 亿、不列上年，
+            # 但 160 亿 ≥5 亿，强档成立）；本期金额也缺才退回偏档。
+            if cur is not None and max(cur) >= BIG_LOSS_YI:
+                return "strong_bullish"
+            return "bullish"
         if "由盈转亏" in flat:
             return "strong_bearish"
         return fallback
@@ -521,11 +546,16 @@ def _trend_band(text: str, fallback: str = "bearish") -> str:
     cur_mid = sum(cur) / 2
     prev_mid = sum(prev) / 2
 
-    # 由盈转亏 / 扭亏为盈：方向反转，直接给强档
+    # 由盈转亏 / 扭亏为盈：方向反转。由盈转亏无条件强档（gold-v9 里两条样本
+    # 两侧金额都 ≥5 亿，加门槛等于空转，故不动）；扭亏为盈自 prompt v7 起
+    # 需过金额门槛——小额扭亏（如 -1.45 亿 → +0.5 亿）方向对但幅度不重大，
+    # 判强正面会与第三档「拿不准取温和」自相矛盾。
     if prev_mid > 0 and cur_mid < 0:
         return "strong_bearish"
     if prev_mid < 0 and cur_mid > 0:
-        return "strong_bullish"
+        if max(abs(prev[0]), abs(prev[1]), cur[0], cur[1]) >= BIG_LOSS_YI:
+            return "strong_bullish"
+        return "bullish"
 
     # 两端都是亏损：比较亏损幅度
     if prev_mid < 0 and cur_mid < 0:
@@ -581,6 +611,27 @@ def _has_operational_basis(text: str) -> bool:
     return has_op or one_off_hits == 0
 
 
+def _reduce_band(title: str) -> str:
+    """减持类按「拟减持」与「执行回执」分档（prompt v7 非业绩预告类判据）。
+
+    只有拟减持改变前瞻预期：股东公告未来要卖，市场面对的是**尚未发生的
+    供给增量** → 一般性利空（bearish）。
+    实施/完成/结果/进展/届满/完毕是既定计划的执行回执，买入方早已知道
+    这批股份要卖 → 无新信息（neutral）。
+    「承诺不减持」是无方向承诺：它不增加利好，只是不加利空 → neutral。
+
+    顺序敏感：「计划实施结果」同时含「计划」与「结果」，必须先排除执行回执，
+    否则 15 条里会有一半被误判成 bearish（实测 6 条）。
+    """
+    if any(w in title for w in ("承诺", "不减持")):
+        return "neutral"
+    if any(w in title for w in ("实施", "完成", "完毕", "结果", "进展", "届满")):
+        return "neutral"
+    if "计划" in title or "预披露" in title:
+        return "bearish"
+    return "neutral"
+
+
 def label(title: str, category: str, text: str = "") -> str | None:
     """按标题 + 正文共同判定档位。
 
@@ -606,10 +657,17 @@ def label(title: str, category: str, text: str = "") -> str | None:
                 # 解析不出上期数字时按**标题方向**回退：预盈/扭亏 → bullish，
                 # 预亏/预减 → bearish（见 _trend_band 的 fallback 说明）。
                 if band == "__trend__":
-                    if category != "业绩预告":
-                        return "bearish"
-                    fallback = "bullish" if kw in ("预盈", "扭亏") else "bearish"
-                    return _trend_band(text, fallback=fallback)
+                    if category == "业绩预告":
+                        fallback = "bullish" if kw in ("预盈", "扭亏") else "bearish"
+                        return _trend_band(text, fallback=fallback)
+                    if category == "补充更正":
+                        # 业绩预告更正/修正/补充公告：正文同样是「本期预计 + 上年
+                        # 同期」结构，方向按同比判。解析不出时取中性——更正本身
+                        # 不表方向，不能因为标题带「更正」就当利空。
+                        return _trend_band(text, fallback="neutral")
+                    return "bearish"
+                if band == "__reduce__":
+                    return _reduce_band(title)
                 if band not in ("bullish", "bearish"):
                     return band
                 # 只有业绩预告的正文才承载"这份公告自身的量化锚点"

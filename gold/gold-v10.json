@@ -1,0 +1,902 @@
+{
+ "set_version": "gold-v10",
+ "built_at": "2026-10-21",
+ "items": [
+  {
+   "doc_id": "1200474144",
+   "as_of": "2014-12-17",
+   "expected_band": "neutral",
+   "text_sha256": "940f83cdd3a943b5c52c4cc4b8bf1c6ba08b992d605b959d0cca57d7bcd8ef1d",
+   "text_chars": 1114
+  },
+  {
+   "doc_id": "1201254400",
+   "as_of": "2015-07-07",
+   "expected_band": "neutral",
+   "text_sha256": "5e776034a7de96a50015f89c6da5a3b23665958e4a8ac7c3f1b826b81f84c815",
+   "text_chars": 989
+  },
+  {
+   "doc_id": "1201334797",
+   "as_of": "2015-07-22",
+   "expected_band": "bullish",
+   "text_sha256": "fbd30e44187012a432f4586d3884bf5d620bc83fc6d5cdcef27d90303ee5d710",
+   "text_chars": 628
+  },
+  {
+   "doc_id": "1201375834",
+   "as_of": "2015-07-31",
+   "expected_band": "neutral",
+   "text_sha256": "a632319a9a921faf7a90751d0c7acc0990b3757a24078932a2690913b1994429",
+   "text_chars": 1046
+  },
+  {
+   "doc_id": "1203022687",
+   "as_of": "2017-01-17",
+   "expected_band": "strong_bullish",
+   "text_sha256": "f0b3d2bb6139f1453912d6054b790bd005949d5e61ac3d65101ce8ca2310f220",
+   "text_chars": 577
+  },
+  {
+   "doc_id": "1203202026",
+   "as_of": "2017-03-26",
+   "expected_band": "strong_bullish",
+   "text_sha256": "dda24bcba00b26f4ac086114faf20b7e4551b4f43c6d24bc5ec41fd901c92d49",
+   "text_chars": 570
+  },
+  {
+   "doc_id": "1204111585",
+   "as_of": "2017-11-03",
+   "expected_band": "bearish",
+   "text_sha256": "b67e1d9d04d788d62f70bbe7db294a2193089a7b4eafb9a0b5fd491b49412bae",
+   "text_chars": 1554
+  },
+  {
+   "doc_id": "1204327743",
+   "as_of": "2018-01-14",
+   "expected_band": "strong_bullish",
+   "text_sha256": "7c0356c28b59740746c32e33527a1277990920730f598314c51bb605a492a81d",
+   "text_chars": 895
+  },
+  {
+   "doc_id": "1204362152",
+   "as_of": "2018-01-25",
+   "expected_band": "strong_bullish",
+   "text_sha256": "d0a31dae12d4b396948d0f573e4d25c73de43633c0b16021d3f4e2df775786bf",
+   "text_chars": 1159
+  },
+  {
+   "doc_id": "1204375966",
+   "as_of": "2018-01-30",
+   "expected_band": "strong_bullish",
+   "text_sha256": "89a40b213434b6d115f1551575bea066f9b07ee29bf828a9f381e05b5383478c",
+   "text_chars": 932
+  },
+  {
+   "doc_id": "1205225814",
+   "as_of": "2018-07-24",
+   "expected_band": "strong_bullish",
+   "text_sha256": "a6c58dac4ecfd21b954c714668bcf162d05833e75af93ff96e8f000c4b3a1552",
+   "text_chars": 597
+  },
+  {
+   "doc_id": "1205508827",
+   "as_of": "2018-10-16",
+   "expected_band": "strong_bullish",
+   "text_sha256": "576a5772b7f8f0271f760092b8a5fdf1e8dc3f2d1c152c905e45ccaab72ac72c",
+   "text_chars": 980
+  },
+  {
+   "doc_id": "1205782247",
+   "as_of": "2019-01-18",
+   "expected_band": "bullish",
+   "text_sha256": "56d4cb5d10ea0bc6e53490036ee586781371941b8ba7dbba1c9b1cdc3c3050f6",
+   "text_chars": 946
+  },
+  {
+   "doc_id": "1205815498",
+   "as_of": "2019-01-30",
+   "expected_band": "bullish",
+   "text_sha256": "7595b0101300f8fbc8b534bf1790a96487dbe953875a6bebda29ee59b2c39de4",
+   "text_chars": 961
+  },
+  {
+   "doc_id": "1205816710",
+   "as_of": "2019-01-31",
+   "expected_band": "bullish",
+   "text_sha256": "21c6f85cfbefc67f857b2fbfd7d9e4a6306f669a2f54986482c2e61f7b25781e",
+   "text_chars": 673
+  },
+  {
+   "doc_id": "1205942409",
+   "as_of": "2019-03-26",
+   "expected_band": "strong_bearish",
+   "text_sha256": "d4ee0136e5be88d8b1adcc1b9e318a9e3caadf20b9a45cd6027ce7e293d6c38b",
+   "text_chars": 1488
+  },
+  {
+   "doc_id": "1207451523",
+   "as_of": "2020-04-02",
+   "expected_band": "bearish",
+   "text_sha256": "a8a7aba7e081d46f200cc77c427b33a4a0f278764b41c1c566111be2a2674909",
+   "text_chars": 1237
+  },
+  {
+   "doc_id": "1209141351",
+   "as_of": "2021-01-19",
+   "expected_band": "bullish",
+   "text_sha256": "5a6083e57f41a7a0d1da83d940bfd73ce1ea06f965f8913751c4cf6ebbd2573f",
+   "text_chars": 938
+  },
+  {
+   "doc_id": "1209337582",
+   "as_of": "2021-03-04",
+   "expected_band": "neutral",
+   "text_sha256": "91827194c36e6dab0a37cdda4a496982a9c9033f07edf29d0caebe2b80317392",
+   "text_chars": 895
+  },
+  {
+   "doc_id": "1209462273",
+   "as_of": "2021-03-26",
+   "expected_band": "neutral",
+   "text_sha256": "2698b24103b0884b6507073623da6622c88b99af83400b7a772163eec5d0b823",
+   "text_chars": 1500
+  },
+  {
+   "doc_id": "1209468053",
+   "as_of": "2021-03-28",
+   "expected_band": "strong_bullish",
+   "text_sha256": "0e220c621c5c8eae949fdb78fdda4ad4028e7f18ea8a8acb8fc904ec9745befa",
+   "text_chars": 1166
+  },
+  {
+   "doc_id": "1209648655",
+   "as_of": "2021-04-07",
+   "expected_band": "bearish",
+   "text_sha256": "142efea43a24601fefb51f74cd1bc393d92543a22c21d706aaf5a435501bad24",
+   "text_chars": 1237
+  },
+  {
+   "doc_id": "1209655637",
+   "as_of": "2021-04-08",
+   "expected_band": "strong_bullish",
+   "text_sha256": "657e504c911bf64a2d4548ecdd918239031f792e2cca109cce81f354574db079",
+   "text_chars": 953
+  },
+  {
+   "doc_id": "1210340903",
+   "as_of": "2021-06-25",
+   "expected_band": "neutral",
+   "text_sha256": "8ea5bb3dae19fb67f1821fc66c08ddb3f74a583de11a98de515354a4558f7e43",
+   "text_chars": 1810
+  },
+  {
+   "doc_id": "1210364706",
+   "as_of": "2021-06-29",
+   "expected_band": "bearish",
+   "text_sha256": "7d5be5548beef244266c2c8043692c035235544d90f51df776cfb2883740982d",
+   "text_chars": 1313
+  },
+  {
+   "doc_id": "1210385206",
+   "as_of": "2021-07-01",
+   "expected_band": "strong_bullish",
+   "text_sha256": "d632a30cfbb80724624ffd8e4c97c6f671728f0889c04999c6ca6337fa1e9021",
+   "text_chars": 1163
+  },
+  {
+   "doc_id": "1210455501",
+   "as_of": "2021-07-09",
+   "expected_band": "strong_bullish",
+   "text_sha256": "8e49dfb012a52ae6e63e881892ee21f4bbcf762aba5f027a31f9e065c1a97155",
+   "text_chars": 717
+  },
+  {
+   "doc_id": "1210551048",
+   "as_of": "2021-07-22",
+   "expected_band": "neutral",
+   "text_sha256": "74ccbcdf77850b908230fec5ab73ab4a8369e49e5ccc44f52012c27cf7da035a",
+   "text_chars": 1365
+  },
+  {
+   "doc_id": "1210958239",
+   "as_of": "2021-09-01",
+   "expected_band": "bearish",
+   "text_sha256": "d262dd133ff2522350f716488cc9fa7beb1d7b3412d8a4cc5ee5f07ad8fa7a25",
+   "text_chars": 1315
+  },
+  {
+   "doc_id": "1211252687",
+   "as_of": "2021-10-13",
+   "expected_band": "strong_bullish",
+   "text_sha256": "c86b0e0769582e1be03c3b15f9e7e651076a64e1f1ed9b6bd929c3f3d8fa6e2a",
+   "text_chars": 759
+  },
+  {
+   "doc_id": "1212263222",
+   "as_of": "2022-01-24",
+   "expected_band": "strong_bullish",
+   "text_sha256": "c1d75c5dd0012aea0cb09a5e12932814e15530c3533008199879d658a7f50167",
+   "text_chars": 779
+  },
+  {
+   "doc_id": "1212297140",
+   "as_of": "2022-01-27",
+   "expected_band": "strong_bullish",
+   "text_sha256": "11aaf7b2aa4f1009d3e7a61f0b497f2a649fabf5ab5b7363dc63309ed37b70cb",
+   "text_chars": 1103
+  },
+  {
+   "doc_id": "1212302905",
+   "as_of": "2022-01-28",
+   "expected_band": "strong_bullish",
+   "text_sha256": "6dac1c0cd412a82016a48510248d6f58cc8227ea7535a8020365e0872d59f784",
+   "text_chars": 1104
+  },
+  {
+   "doc_id": "1213210363",
+   "as_of": "2022-04-28",
+   "expected_band": "neutral",
+   "text_sha256": "8c71a1a7ed2e13eb11542d502334970c41e07ad327db63aebe6e2e5081446c80",
+   "text_chars": 857
+  },
+  {
+   "doc_id": "1214557506",
+   "as_of": "2022-09-07",
+   "expected_band": "bearish",
+   "text_sha256": "d0a85e5d246ea626520a14f8536bf499a0b4316d8e571e72388100ae98987bcb",
+   "text_chars": 1295
+  },
+  {
+   "doc_id": "1215317004",
+   "as_of": "2022-12-09",
+   "expected_band": "neutral",
+   "text_sha256": "403bf49306792a1f0cdf647d0f3908009f8aff653cec42fd3be9db222d36c597",
+   "text_chars": 733
+  },
+  {
+   "doc_id": "1215625526",
+   "as_of": "2023-01-16",
+   "expected_band": "strong_bullish",
+   "text_sha256": "a497f359bd0cfd1e07df7d3e028c80be1db7f6a6f134cd3f2fb3aedb54aa3591",
+   "text_chars": 972
+  },
+  {
+   "doc_id": "1215683680",
+   "as_of": "2023-01-20",
+   "expected_band": "strong_bullish",
+   "text_sha256": "ca6d7e9ae7853849bec70ff2cf66dabae61fd5b2aef1b09cceb353708997f03b",
+   "text_chars": 1152
+  },
+  {
+   "doc_id": "1215888900",
+   "as_of": "2023-02-17",
+   "expected_band": "bearish",
+   "text_sha256": "e75ca6eba0170ee5c1ee5296e409e5607f622b07a74b316dc2ef156e8149f42b",
+   "text_chars": 1297
+  },
+  {
+   "doc_id": "1216126934",
+   "as_of": "2023-03-15",
+   "expected_band": "neutral",
+   "text_sha256": "612b6d4d875731ce04f3db602e2c79e5980da766a43fd005c79507e976c0168a",
+   "text_chars": 1264
+  },
+  {
+   "doc_id": "1216419923",
+   "as_of": "2023-04-14",
+   "expected_band": "bearish",
+   "text_sha256": "405f321c6c0ea355d7ee9857b10ca0a4a8893e161618f2e264b0b40b23a3388e",
+   "text_chars": 1753
+  },
+  {
+   "doc_id": "1216472916",
+   "as_of": "2023-04-19",
+   "expected_band": "strong_bearish",
+   "text_sha256": "3726bc34e2c6a79c4e9b58fca9878f3acdf46a76d93cf7b1340c1e29f9ca49d5",
+   "text_chars": 1321
+  },
+  {
+   "doc_id": "1217116133",
+   "as_of": "2023-06-21",
+   "expected_band": "bearish",
+   "text_sha256": "2e8598cfbc9daf3280970c569b540b080e5dc1594053a2942df45adb02c49ddd",
+   "text_chars": 1832
+  },
+  {
+   "doc_id": "1217281955",
+   "as_of": "2023-07-12",
+   "expected_band": "strong_bearish",
+   "text_sha256": "db75353f4ba220c27943cba73ee3f761c783af55da14845367e7b889059ef314",
+   "text_chars": 996
+  },
+  {
+   "doc_id": "1217299768",
+   "as_of": "2023-07-14",
+   "expected_band": "strong_bearish",
+   "text_sha256": "ca8957b3f0e9a1c288a677c2fdbd19e7b71ef3d6a3ff3f8e062ff0b23ad72ad2",
+   "text_chars": 1161
+  },
+  {
+   "doc_id": "1217302290",
+   "as_of": "2023-07-14",
+   "expected_band": "bullish",
+   "text_sha256": "899519624897900c6d739c15c089dc51a66cf1f0c026801ea1b563e83db1c7e6",
+   "text_chars": 934
+  },
+  {
+   "doc_id": "1217302507",
+   "as_of": "2023-07-14",
+   "expected_band": "bullish",
+   "text_sha256": "1cc346bad96a049312eef55291973e0e7794c9b569417635af6457c2e706b468",
+   "text_chars": 931
+  },
+  {
+   "doc_id": "1217577962",
+   "as_of": "2023-08-20",
+   "expected_band": "neutral",
+   "text_sha256": "cc446223355f82c9e304b02c2251a181dae01111a9d829194d938273286a0156",
+   "text_chars": 3780
+  },
+  {
+   "doc_id": "1219012004",
+   "as_of": "2024-01-26",
+   "expected_band": "bullish",
+   "text_sha256": "35ab8b0bfb2c39e29b4e72133771feadf12d2ee49796e09d5c843d59d3819304",
+   "text_chars": 1177
+  },
+  {
+   "doc_id": "1219012979",
+   "as_of": "2024-01-26",
+   "expected_band": "bullish",
+   "text_sha256": "2b46fbd9ded2bf246a3fac6ef336074c14a547c49fa6594cc6a046b20f49c031",
+   "text_chars": 962
+  },
+  {
+   "doc_id": "1219012981",
+   "as_of": "2024-01-26",
+   "expected_band": "bullish",
+   "text_sha256": "5f40e1cb50afe7c9d30a5d17d9a1e9b57292ad91c01d96018dc1220ed99a1fb2",
+   "text_chars": 961
+  },
+  {
+   "doc_id": "1219029137",
+   "as_of": "2024-01-29",
+   "expected_band": "bullish",
+   "text_sha256": "9948843e0c0dfe3e374d99e9f87afbb56ed48a678ae4f0c31ffbe4cf420f239b",
+   "text_chars": 1376
+  },
+  {
+   "doc_id": "1219041182",
+   "as_of": "2024-01-30",
+   "expected_band": "strong_bullish",
+   "text_sha256": "149760b6a30a5ad65a9f9065074b86c6a95ba270f4a4cce584c91dbd4ce35421",
+   "text_chars": 1089
+  },
+  {
+   "doc_id": "1219043064",
+   "as_of": "2024-01-30",
+   "expected_band": "strong_bearish",
+   "text_sha256": "f2f17b53c8dc928d8001372d5fe7352b485d23453a6e0ceffcd6edcfe74e73cb",
+   "text_chars": 1270
+  },
+  {
+   "doc_id": "1220402219",
+   "as_of": "2024-06-19",
+   "expected_band": "bearish",
+   "text_sha256": "60461b30fca1756725c54a52344d4345ab540178246f2c0bd477a98e12036f5c",
+   "text_chars": 1316
+  },
+  {
+   "doc_id": "1220560375",
+   "as_of": "2024-07-08",
+   "expected_band": "strong_bullish",
+   "text_sha256": "fa7c22ca01ad040c777475f69bc08185ea8d4f8ef813630ec79b23fd29a89e8e",
+   "text_chars": 1115
+  },
+  {
+   "doc_id": "1220615510",
+   "as_of": "2024-07-11",
+   "expected_band": "bullish",
+   "text_sha256": "de12b596bf8dd6b35e2d9f21ff058183611c3e6c3c6ae04d71f72b98b4647c34",
+   "text_chars": 1107
+  },
+  {
+   "doc_id": "1220937409",
+   "as_of": "2024-08-21",
+   "expected_band": "neutral",
+   "text_sha256": "16b5087b9858c93f3b07103e32779a4734df6c2b879260afa21ac1f94161058c",
+   "text_chars": 1268
+  },
+  {
+   "doc_id": "1221927917",
+   "as_of": "2024-12-04",
+   "expected_band": "neutral",
+   "text_sha256": "a091b20e10951efc9cb0bab525e90dda9bc3d71e9d902c75944276f0c71c22bb",
+   "text_chars": 1303
+  },
+  {
+   "doc_id": "1222353824",
+   "as_of": "2025-01-16",
+   "expected_band": "bullish",
+   "text_sha256": "2e1918c35f33b0da727f9d86dbd57e96b09083b4589499ac09f8e3dbd49d42c8",
+   "text_chars": 1134
+  },
+  {
+   "doc_id": "1222365748",
+   "as_of": "2025-01-17",
+   "expected_band": "bullish",
+   "text_sha256": "6350399463045ecfa6796eee15ff2aba4688d0218c774bc8428290235c3d66eb",
+   "text_chars": 940
+  },
+  {
+   "doc_id": "1222389014",
+   "as_of": "2025-01-21",
+   "expected_band": "strong_bullish",
+   "text_sha256": "d8190d2e53840f760af31f34a18dc180f39ed368b63ed13f130d812503baaa73",
+   "text_chars": 1186
+  },
+  {
+   "doc_id": "1222430156",
+   "as_of": "2025-01-24",
+   "expected_band": "strong_bearish",
+   "text_sha256": "abd621629c4897f854084cc2859657921b07a8470d0ba4a70617f4ee506eac9f",
+   "text_chars": 1080
+  },
+  {
+   "doc_id": "1222449080",
+   "as_of": "2025-01-27",
+   "expected_band": "strong_bearish",
+   "text_sha256": "363efe1539ac87f09e66949d9776d5e06029dbf6a86fd3b59f5e070e2f8f28ac",
+   "text_chars": 1100
+  },
+  {
+   "doc_id": "1223030017",
+   "as_of": "2025-04-08",
+   "expected_band": "bullish",
+   "text_sha256": "f813f1ae9cfe498bbae39d1bc45badd585a9499a1c5785a33dbad253243e16bf",
+   "text_chars": 764
+  },
+  {
+   "doc_id": "1223412468",
+   "as_of": "2025-04-29",
+   "expected_band": "neutral",
+   "text_sha256": "21c2d85f96bfcdfe4620255cd1acab225e242ce0aecd2ebd870ef1074dfb208b",
+   "text_chars": 791
+  },
+  {
+   "doc_id": "1223684748",
+   "as_of": "2025-05-26",
+   "expected_band": "neutral",
+   "text_sha256": "9c05850f92696caf8265ee66575b06098afdea2f56a28ddef5b448324e270132",
+   "text_chars": 2105
+  },
+  {
+   "doc_id": "1223803766",
+   "as_of": "2025-06-06",
+   "expected_band": "bearish",
+   "text_sha256": "2068a119e2a88565f2b3d0127e9bae1ed77c8b6de448cd921c5ca6feb9d6ec76",
+   "text_chars": 1539
+  },
+  {
+   "doc_id": "1224157941",
+   "as_of": "2025-07-13",
+   "expected_band": "strong_bullish",
+   "text_sha256": "601a731fbb9b40cc58c920b1df314bf59e5c50a444952e5d59f8863d280cdecf",
+   "text_chars": 1062
+  },
+  {
+   "doc_id": "1224163356",
+   "as_of": "2025-07-14",
+   "expected_band": "strong_bullish",
+   "text_sha256": "a1e97036febc6d6b23f54c4a6812d21e6e306dd28f9b15c45cb511cfeac6675c",
+   "text_chars": 1027
+  },
+  {
+   "doc_id": "1224164332",
+   "as_of": "2025-07-14",
+   "expected_band": "strong_bearish",
+   "text_sha256": "b0618429b8e9b17ebd70ede3d89f75cff9cf602ff5d7b432467c6c70b822e390",
+   "text_chars": 973
+  },
+  {
+   "doc_id": "1224164979",
+   "as_of": "2025-07-14",
+   "expected_band": "strong_bullish",
+   "text_sha256": "9bae29a7fdd2bc368aa9adc2b74c77e11a5d8be00ba4db278fb3d429d12a13cf",
+   "text_chars": 1016
+  },
+  {
+   "doc_id": "1224312114",
+   "as_of": "2025-07-27",
+   "expected_band": "bearish",
+   "text_sha256": "0bf56cee4bf4b983b54353fdc7a180a7e359a68c71a56301a2db7bcfbfe37ebf",
+   "text_chars": 1445
+  },
+  {
+   "doc_id": "1224473232",
+   "as_of": "2025-08-13",
+   "expected_band": "bearish",
+   "text_sha256": "4e3dbcc32a03ee3121233b6b030056f568c9600149f381c117cb36dc7d07f01b",
+   "text_chars": 1369
+  },
+  {
+   "doc_id": "1224558706",
+   "as_of": "2025-08-24",
+   "expected_band": "neutral",
+   "text_sha256": "cda2b46fa4f66402967ba1cc87ac7ce7372ac03c8364404afa0d028e6937f740",
+   "text_chars": 961
+  },
+  {
+   "doc_id": "1224874966",
+   "as_of": "2025-12-12",
+   "expected_band": "neutral",
+   "text_sha256": "d58bfa202ea7d63baf4b04c322ee651f224e8ebb5c7a91e5657c68d8ce411bb7",
+   "text_chars": 6661
+  },
+  {
+   "doc_id": "1224888929",
+   "as_of": "2025-12-19",
+   "expected_band": "neutral",
+   "text_sha256": "71966bcb49c2a225d5327fd6df74865fc6f68c8456af2b053ac65a3ee77cc33c",
+   "text_chars": 1226
+  },
+  {
+   "doc_id": "1224910535",
+   "as_of": "2025-12-30",
+   "expected_band": "strong_bullish",
+   "text_sha256": "6066ad013f211b22779bdcdbb95593e8d77afbf57c9c3f13f64aceb933224881",
+   "text_chars": 1144
+  },
+  {
+   "doc_id": "1224922731",
+   "as_of": "2026-01-07",
+   "expected_band": "bearish",
+   "text_sha256": "132a9c4e24918a8f1d1d3256065d76069583ff01b5c3beffc08a1368568f4363",
+   "text_chars": 1605
+  },
+  {
+   "doc_id": "1224955722",
+   "as_of": "2026-01-29",
+   "expected_band": "bullish",
+   "text_sha256": "b5e6ece31257ee9463bcda0992f3e7aa6b075864907da4481b04255ab30dd83f",
+   "text_chars": 1299
+  },
+  {
+   "doc_id": "1224956780",
+   "as_of": "2026-01-29",
+   "expected_band": "strong_bullish",
+   "text_sha256": "96df4fb30e8dc4351d240bbe9a207a108bbfe68b9a713eae7222ced40cc51f94",
+   "text_chars": 1005
+  },
+  {
+   "doc_id": "1224960248",
+   "as_of": "2026-01-30",
+   "expected_band": "strong_bullish",
+   "text_sha256": "8a91cf61ed3648e16b1c2ad7660630115796772e66664f29abedbe696b479059",
+   "text_chars": 1022
+  },
+  {
+   "doc_id": "1224984736",
+   "as_of": "2026-02-25",
+   "expected_band": "bearish",
+   "text_sha256": "301ce0072dd3f097a3edd782a615b46fe7d058d80e36b94f2043402f82cfc5e7",
+   "text_chars": 1520
+  },
+  {
+   "doc_id": "1224994741",
+   "as_of": "2026-03-03",
+   "expected_band": "neutral",
+   "text_sha256": "d1a328793a490419d9de841ca27110e16a4d2bdfd5d9797d1233567058592b5d",
+   "text_chars": 1142
+  },
+  {
+   "doc_id": "1225048745",
+   "as_of": "2026-03-27",
+   "expected_band": "neutral",
+   "text_sha256": "8281c1a008ddd06eda03f203777daee77a9ef575ff00b78541294d485014d5be",
+   "text_chars": 694
+  },
+  {
+   "doc_id": "1225135142",
+   "as_of": "2026-04-21",
+   "expected_band": "strong_bearish",
+   "text_sha256": "7633f21ad0430aa021bfef006c5934eb3aa11bf699c9134abe241ac992687826",
+   "text_chars": 1455
+  },
+  {
+   "doc_id": "1225265478",
+   "as_of": "2026-04-29",
+   "expected_band": "neutral",
+   "text_sha256": "69b075e60f1b7a8aa4973f871b947fc151972b845dac27f49eb74023d8dbd7e6",
+   "text_chars": 7667
+  },
+  {
+   "doc_id": "1225321198",
+   "as_of": "2026-05-20",
+   "expected_band": "neutral",
+   "text_sha256": "13421f4327af05105ff0207c583d73b3087382013a024045f84e2b91c11ba2c8",
+   "text_chars": 4972
+  },
+  {
+   "doc_id": "1225366264",
+   "as_of": "2026-06-11",
+   "expected_band": "neutral",
+   "text_sha256": "75dbab6fcdef26de60d736e61b9f35c5d0f8f5313bb58e2b739cf2308f35d15f",
+   "text_chars": 3347
+  },
+  {
+   "doc_id": "1225379934",
+   "as_of": "2026-06-21",
+   "expected_band": "neutral",
+   "text_sha256": "fb653d809a225a06586d6b39f625c063a1e78283dacbf6f7da22963cf9b9c76f",
+   "text_chars": 1903
+  },
+  {
+   "doc_id": "1225384139",
+   "as_of": "2026-06-23",
+   "expected_band": "neutral",
+   "text_sha256": "5c5da45bebb54736db5c799933a364ae9f02faf81183fcb882770bd6c5b8fb14",
+   "text_chars": 2980
+  },
+  {
+   "doc_id": "1225391501",
+   "as_of": "2026-06-26",
+   "expected_band": "neutral",
+   "text_sha256": "e9656becacda85fe0f4b72f43cce64aaa6d8087eeffe516b71802476980f6639",
+   "text_chars": 5926
+  },
+  {
+   "doc_id": "1225409111",
+   "as_of": "2026-07-03",
+   "expected_band": "neutral",
+   "text_sha256": "193238fd06b07ac15a135fc2cf95e2eca52247b55a803729d1f3314c33af21a9",
+   "text_chars": 2458
+  },
+  {
+   "doc_id": "1225415970",
+   "as_of": "2026-07-08",
+   "expected_band": "bearish",
+   "text_sha256": "20f8c8cc8838b079d352b837ee857577ca3ff1fdf110bcbe82f66ee97076f28a",
+   "text_chars": 3482
+  },
+  {
+   "doc_id": "1225417751",
+   "as_of": "2026-07-09",
+   "expected_band": "strong_bullish",
+   "text_sha256": "f04ae2f6d9e62b5a7e59e7d9a69876128a58a35da13aa8428bb13d3a7ccd5d5d",
+   "text_chars": 1422
+  },
+  {
+   "doc_id": "1225418583",
+   "as_of": "2026-07-10",
+   "expected_band": "strong_bullish",
+   "text_sha256": "c46803db00c5963c238139be2cbcdec63c9769c2ac5194735712d75fd6c71553",
+   "text_chars": 1448
+  },
+  {
+   "doc_id": "1225418940",
+   "as_of": "2026-07-10",
+   "expected_band": "bullish",
+   "text_sha256": "f9d4511b385a618d797d9e370d25b8f5f28dd89bd756ccda3d75c103eb09c73b",
+   "text_chars": 804
+  },
+  {
+   "doc_id": "1225424345",
+   "as_of": "2026-07-14",
+   "expected_band": "strong_bullish",
+   "text_sha256": "99ea47d162f1ca0fda778d4a1d33a3ceea153d28b8624ec0d33fb45c839d1cd8",
+   "text_chars": 1089
+  },
+  {
+   "doc_id": "1225424738",
+   "as_of": "2026-07-14",
+   "expected_band": "strong_bearish",
+   "text_sha256": "45b8fa01fe504b09639c1dc8f7f3d84918adb89caf679885d2482d927fa7ddbb",
+   "text_chars": 1204
+  },
+  {
+   "doc_id": "1225424881",
+   "as_of": "2026-07-14",
+   "expected_band": "strong_bearish",
+   "text_sha256": "bbfc6c2e79c745df844170983e34f401ed7450fed12eeea5d81c1653f6576b70",
+   "text_chars": 1103
+  },
+  {
+   "doc_id": "1225426598",
+   "as_of": "2026-07-15",
+   "expected_band": "neutral",
+   "text_sha256": "7ba0bbc916acd1d0861bf6fc206af7bf00adb527382bd110e34f06566f66c5f4",
+   "text_chars": 1820
+  },
+  {
+   "doc_id": "1225436927",
+   "as_of": "2026-07-22",
+   "expected_band": "neutral",
+   "text_sha256": "2e41ebf222f72cc0ef9119e452b278e87df0a27354ef46afb8554518ab20df06",
+   "text_chars": 2855
+  },
+  {
+   "doc_id": "1225449351",
+   "as_of": "2026-07-30",
+   "expected_band": "neutral",
+   "text_sha256": "5dc290e37c7cdd79967d4f7bee98a3d6df25f674a6e66a4322f5916e0e22ea9e",
+   "text_chars": 1591
+  },
+  {
+   "doc_id": "1225468251",
+   "as_of": "2026-08-11",
+   "expected_band": "neutral",
+   "text_sha256": "12a057c135ab5afb3f7c997b5d62145bddbec4e4a76a5d92c98fd8c7b63844bd",
+   "text_chars": 2048
+  },
+  {
+   "doc_id": "1225470513",
+   "as_of": "2026-08-12",
+   "expected_band": "neutral",
+   "text_sha256": "ee08a90222b33eafd45b9bf90d63c4ce9c5f77d7ea8dc0d8daf24579e9b2fa8b",
+   "text_chars": 2645
+  },
+  {
+   "doc_id": "1225486442",
+   "as_of": "2026-08-20",
+   "expected_band": "bullish",
+   "text_sha256": "b08e62e25e2bf70e77d9f8c1abe38be03c5e1a0f1a19d6cd15521d9745e887b4",
+   "text_chars": 1164
+  },
+  {
+   "doc_id": "1225531406",
+   "as_of": "2026-08-28",
+   "expected_band": "bullish",
+   "text_sha256": "b776af0964e5d6a5c293e9bcef29688eab1a596ef9767842330596708b47ff0f",
+   "text_chars": 1828
+  },
+  {
+   "doc_id": "1225543317",
+   "as_of": "2026-09-02",
+   "expected_band": "neutral",
+   "text_sha256": "be7f638afd5b7658bcba88dbcc3847664762bdaf57c5735cb52b0592ced13644",
+   "text_chars": 2201
+  },
+  {
+   "doc_id": "1225556087",
+   "as_of": "2026-09-09",
+   "expected_band": "neutral",
+   "text_sha256": "f67f59bc45a3a2ed13f0397b635f20492e3be79a7d695959cd4df5ab7ef94bba",
+   "text_chars": 2763
+  },
+  {
+   "doc_id": "1225568476",
+   "as_of": "2026-09-16",
+   "expected_band": "neutral",
+   "text_sha256": "f1de0d84e54906fd968f3443193be9f6b82f67c356f273af9f2c9aa4cd905fff",
+   "text_chars": 1658
+  },
+  {
+   "doc_id": "1225574679",
+   "as_of": "2026-09-21",
+   "expected_band": "neutral",
+   "text_sha256": "74fd9d14cb50d109a7a36a63e1f9c307d1aa3351cabed43627f8011a9df890ae",
+   "text_chars": 3056
+  },
+  {
+   "doc_id": "1225576461",
+   "as_of": "2026-09-22",
+   "expected_band": "neutral",
+   "text_sha256": "01639fe37a84b2fc724b85421cbb0ff301005206f0eb3cae2150bd8302cab427",
+   "text_chars": 2409
+  },
+  {
+   "doc_id": "1225577684",
+   "as_of": "2026-09-22",
+   "expected_band": "neutral",
+   "text_sha256": "dcb7fcd6c72cce796e43e25d97bd5acab24b6b7e2493f8c1846c35d052537a75",
+   "text_chars": 1416
+  },
+  {
+   "doc_id": "1225588830",
+   "as_of": "2026-09-29",
+   "expected_band": "neutral",
+   "text_sha256": "3432bd7c5d676e5ff8eca4300efc9fa2ce1cf8de187476add90b34cbf4ba9e79",
+   "text_chars": 10495
+  },
+  {
+   "doc_id": "1225604972",
+   "as_of": "2026-10-14",
+   "expected_band": "neutral",
+   "text_sha256": "5805c2d1af715f6254b69b03c26d7422f97c076d7d021f2601f3ec709e850840",
+   "text_chars": 3263
+  },
+  {
+   "doc_id": "1225606806",
+   "as_of": "2026-10-15",
+   "expected_band": "neutral",
+   "text_sha256": "e2b83aa02b1dae3805c60cf82f5ab15cc2e6e3882c5a02bc2e8ecbc2505258d0",
+   "text_chars": 2473
+  },
+  {
+   "doc_id": "1225612264",
+   "as_of": "2026-10-20",
+   "expected_band": "strong_bullish",
+   "text_sha256": "6b0a1b8ff7c2f1c8bdcdc4ee58cbffeb024728e5703b6c331611c52f504f3c3f",
+   "text_chars": 1034
+  },
+  {
+   "doc_id": "13771222",
+   "as_of": "2004-03-11",
+   "expected_band": "bullish",
+   "text_sha256": "ef92f61db1e24578ab4a8ac802e7b4a94e4c4941ab02406a3ef547640bf7fccb",
+   "text_chars": 668
+  },
+  {
+   "doc_id": "29748115",
+   "as_of": "2007-07-09",
+   "expected_band": "strong_bullish",
+   "text_sha256": "53cb1bd828b334237df8dda41d1bc318719d83d3def9da9809e3a34bc151fcbc",
+   "text_chars": 503
+  },
+  {
+   "doc_id": "36774212",
+   "as_of": "2008-01-17",
+   "expected_band": "strong_bullish",
+   "text_sha256": "05a469068960ec2c2449f4f26a15726343ca305ac80dc6f94eb9f68ae756d311",
+   "text_chars": 622
+  },
+  {
+   "doc_id": "38669137",
+   "as_of": "2008-04-09",
+   "expected_band": "strong_bullish",
+   "text_sha256": "b8ccaaf83e2198478bfc5678247a5f59a4dc6939b7825b6a1419b01d1ea18d13",
+   "text_chars": 559
+  },
+  {
+   "doc_id": "41023097",
+   "as_of": "2008-07-03",
+   "expected_band": "strong_bullish",
+   "text_sha256": "079db00cb5b65aa00c4951db7cca6744313de961ed0dc50c332d293613577c4f",
+   "text_chars": 570
+  },
+  {
+   "doc_id": "57944520",
+   "as_of": "2010-05-12",
+   "expected_band": "neutral",
+   "text_sha256": "6b237320266ce4c9c10dc86827e4506763cafa4ce43eaf65345579ec76c874ea",
+   "text_chars": 906
+  },
+  {
+   "doc_id": "60458343",
+   "as_of": "2012-01-17",
+   "expected_band": "strong_bullish",
+   "text_sha256": "a22a4cb0c00fdaca6c8676c76c8b469291e9402c1c67a96e2ebf65d6a83688c0",
+   "text_chars": 1236
+  },
+  {
+   "doc_id": "61236077",
+   "as_of": "2012-07-08",
+   "expected_band": "strong_bullish",
+   "text_sha256": "56675e417b20bbf0fb839a3dd6eee6332092530e30d701f8d6e95fbb3fa57660",
+   "text_chars": 555
+  },
+  {
+   "doc_id": "61650581",
+   "as_of": "2012-10-14",
+   "expected_band": "strong_bullish",
+   "text_sha256": "1c34fac3f32a31bfc23a4613a9403121212412f241ef36173abe3d95d2b666f3",
+   "text_chars": 894
+  },
+  {
+   "doc_id": "62006522",
+   "as_of": "2013-01-10",
+   "expected_band": "strong_bullish",
+   "text_sha256": "9addfa4a5b2c9aab760419fd08fa7d24d6d7145d4a6484fa4cd69686244b861b",
+   "text_chars": 595
+  },
+  {
+   "doc_id": "62065601",
+   "as_of": "2013-01-24",
+   "expected_band": "strong_bullish",
+   "text_sha256": "6be87dc653bc6428a65484e6541d8350a223ea3d0fb077f7401c5062e0ef41b6",
+   "text_chars": 531
+  }
+ ]
+}

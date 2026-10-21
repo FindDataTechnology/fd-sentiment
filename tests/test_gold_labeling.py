@@ -335,3 +335,97 @@ def test_buyback_price_cap_adjustment_is_neutral():
             "2.调整后回购股份价格上限:151.01元/股。3.调整生效日期:2026年7月16日。")
     title = "关于2025年度分红派息实施后调整回购股份价格上限的公告"
     assert g.label(title, "权益分派", text) == "neutral"
+
+
+# ==== prompt v7：扭亏金额门槛 + 非业绩预告类判据 ====
+
+def test_small_turnaround_is_bullish():
+    """小额扭亏 → 偏正面（prompt v7 金额门槛）。
+
+    实测柳钢 2024H1：上年同期亏 1.45 亿，本期预计盈 0.50–0.58 亿。
+    方向改善是真的，但金额不重大——判强正面会与第三档「拿不准取温和」冲突。
+    """
+    text = (BOILER + "预计2024年半年度实现归属于上市公司股东的净利润为5000万元到5800万元。"
+            "上年同期业绩情况 归属于上市公司股东的净利润:-14472万元。")
+    assert g._period_amounts(text) is not None
+    assert g.label("柳钢股份2024年半年度业绩预盈公告", "业绩预告", text) == "bullish"
+
+
+def test_large_turnaround_stays_strong():
+    """大额扭亏仍进强档：上年亏 202 亿 → 本期盈 3.0–4.5 亿。"""
+    text = (BOILER + "预计2023年年度实现归属于上市公司股东的净利润为3亿元到4.5亿元。"
+            "上年同期业绩情况 归属于上市公司股东的净利润:-202.47亿元。")
+    assert g.label("海航控股：2023年年度业绩预盈公告", "业绩预告", text) == "strong_bullish"
+
+
+def test_turnaround_without_any_amount_is_bullish():
+    """正文只说「扭亏为盈」且解析不出任何金额 → 偏正面（无法证明金额重大）。"""
+    text = BOILER + "报告期内公司经营情况改善，较上年同期预计将实现扭亏为盈。"
+    assert g._period_amounts(text) == (None, None)
+    assert g.label("某公司2025年半年度业绩预盈公告", "业绩预告", text) == "bullish"
+
+
+def test_reduce_plan_is_bearish():
+    """拟减持/预披露 → 偏负面（未来供给增加）。"""
+    for title in (
+        "关于股东减持公司股份计划的公告",
+        "紫金矿业集团股份有限公司高级管理人员减持股份计划公告",
+        "关于大股东减持股份的预披露公告",
+        "股东减持股份计划公告",
+    ):
+        assert g.label(title, "股权变动", "") == "bearish", title
+
+
+def test_reduce_execution_is_neutral():
+    """减持执行回执 → 中性（既定计划兑现，无新信息）。"""
+    for title in (
+        "关于职工监事股份减持计划实施完成的公告",
+        "关于股东减持公司股份计划实施结果的公告",
+        "关于部分高级管理人员减持计划时间过半的进展公告",
+        "关于部分高级管理人员减持计划实施进展暨减持期限届满的公告",
+        "关于2021年度员工持股计划减持完毕的公告",
+    ):
+        assert g.label(title, "股权变动", "") == "neutral", title
+
+
+def test_no_reduce_commitment_is_neutral():
+    """「承诺不减持」是无方向承诺 → 中性，不占负面档。"""
+    title = "中国南方航空集团有限公司关于不存在减持公司股票行为或减持计划的承诺函"
+    assert g.label(title, "股权变动", "") == "neutral"
+
+
+def test_involving_litigation_is_bearish():
+    """涉及诉讼/仲裁 → 偏负面，不进强档（金额与结果不确定）。"""
+    title = "绿地控股关于公司及控股子公司2022年至2025年上半年涉及诉讼的补充公告"
+    assert g.label(title, "补充更正", "公司及控股子公司涉及诉讼。") == "bearish"
+    assert g.label("关于涉及仲裁的公告", "补充更正", "涉及仲裁。") == "bearish"
+
+
+def test_earnings_correction_uses_trend_not_title():
+    """业绩预告更正公告按同比判方向，不因标题含「更正」直接判负面。"""
+    text = (BOILER + "预计2025年年度实现归属于母公司所有者的净利润约为-261亿元至-266亿元。"
+            "上年同期业绩情况 归属于母公司所有者的净利润:-155.52亿元。")
+    assert g.label("绿地控股2025年年度业绩预告更正公告", "补充更正", text) == "strong_bearish"
+    # 上修（亏损收窄）不该判负面
+    text2 = (BOILER + "预计本期净亏损约为人民币9亿元至13亿元。"
+             "上年同期业绩情况 归属于上市公司股东的净利润:-386亿元。")
+    assert g.label("某公司业绩预告修正公告", "补充更正", text2) == "bullish"
+
+
+def test_earnings_correction_without_numbers_is_neutral():
+    """更正公告解析不出两个数 → 中性（更正本身不表方向）。"""
+    text = BOILER + "公司对前次业绩预告中的部分表述予以更正，具体内容详见下文。"
+    assert g.label("某公司2025年年度业绩预告更正公告", "补充更正", text) == "neutral"
+
+
+def test_other_correction_is_neutral():
+    """非业绩预告的更正/补充（年报更正、章程修订）→ 中性。"""
+    assert g.label("关于2024年年度报告更正的公告", "补充更正", "") == "neutral"
+    assert g.label("关于补充公告的说明", "补充更正", "") == "neutral"
+
+
+def test_rule_sources_cover_new_categories():
+    """新规则必须能回指 prompt 条目（sentiment-gold-coverage）。"""
+    names = [r[0] for r in g.rule_sources()]
+    for expect in ("股权变动/减持", "补充更正/业绩预告", "补充更正/涉及诉讼", "补充更正/其他"):
+        assert expect in names, f"规则来源缺 {expect}"
