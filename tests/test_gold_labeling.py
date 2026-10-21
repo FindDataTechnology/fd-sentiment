@@ -114,13 +114,27 @@ def test_loss_narrowing_is_positive():
 
 def test_loss_widening_is_negative():
     """亏损扩大 → 负面；扩大 ≥50% → 强负面。"""
-    mild = (BOILER + "预计净亏损约为人民币113亿元。"
-            "上年同期业绩情况 归属于上市公司股东的净亏损:人民币108.42亿元。")
+    mild = (BOILER + "预计净亏损约为人民币4亿元。"
+            "上年同期业绩情况 归属于上市公司股东的净亏损:人民币3.8亿元。")
     assert g.label("某公司2021年年度业绩预亏公告", "业绩预告", mild) == "bearish"
 
     severe = (BOILER + "预计净亏损约为人民币102亿元。"
               "上年同期业绩情况 归属于上市公司股东的净亏损:人民币46.88亿元。")
     assert g.label("某公司2022年半年度业绩预亏公告", "业绩预告", severe) == "strong_bearish"
+
+
+def test_big_loss_widening_hits_amount_anchor():
+    """亏损扩大幅度温和、但金额 ≥5 亿元 → 仍进强档（金额锚点等价）。
+
+    prompt v6 条件② 把「单期亏损 ≥5 亿元」列为强档锚点；spec 要求标注器
+    同等地实现全部锚点形态。实测南航 2025 半年度：亏 13.38–17.56 亿，
+    上年亏 12.28 亿（扩大 26%，未过 50%），按金额锚点应判强负面。
+    """
+    text = (BOILER + "预计公司2025年半年度实现归属于上市公司股东的净利润为人民币"
+            "-13.38亿元到人民币-17.56亿元。"
+            "二、上年同期业绩情况 归属于上市公司股东的净利润:人民币-12.28亿元。")
+    assert g._period_amounts(text)[0] == (-17.56, -13.38)
+    assert g.label("南方航空2025年半年度业绩预亏公告", "业绩预告", text) == "strong_bearish"
 
 
 def test_profit_to_loss_is_strong_negative():
@@ -206,3 +220,118 @@ def test_amount_anchor_is_loss_only():
                    / "fd_sentiment" / "prompts" / "v6" / "bands.md").read_text(encoding="utf-8")
     assert "只适用于亏损" in prompt_text
     assert "亏损或盈利金额" not in prompt_text
+
+
+# ==== 金额解析：兜底正则与口径（gold-v9 重标前修正）====
+
+def test_single_amount_without_range_does_not_crash():
+    """单值金额走两捕获组的兜底正则，不得 IndexError。
+
+    主正则要求「X 到 Y」区间；单值公告（「净亏损约为 0.8 亿元」）落到只有
+    两个捕获组的兜底正则。旧代码用 `m.lastindex and m.group(3)` 判空，而
+    `m.lastindex == 2` 为真，于是仍去取 group(3) → IndexError，整轮建集中断。
+    """
+    assert g._amount_yi("净亏损约为人民币0.8亿元") == (0.8, 0.8)
+    assert g._amount_yi("净利润为人民币2,651百万元") == (26.51, 26.51)
+
+
+def test_wan_yuan_unit_parsed():
+    """「85,000 万元」= 8.5 亿元：航空/钢铁类公告常用万元口径。"""
+    assert g._amount_yi("净亏损85,000万元") == (8.5, 8.5)
+    lo, hi = g._amount_yi("净亏损85,000万元至92,000万元")
+    assert abs(lo - 8.5) < 1e-9 and abs(hi - 9.2) < 1e-9
+
+
+def test_explicit_current_period_beats_delta_form():
+    """正文明确写了本期金额时，用它；差额式只用于反推。
+
+    实测陕煤 2023 半年度：既写本期 112–118 亿，又写「将减少 137 亿元到 143 亿元」。
+    先算差额会把本期算成 103–109 亿（虽然同档），但显式值才是公告口径。
+    """
+    text = (BOILER + "预计2023年半年度实现归属于上市公司股东的净利润与上年同期相比，"
+            "将减少137亿元到143亿元，同比减少53%到56%。"
+            "预计2023年半年度实现归属于上市公司股东的净利润为112亿元到118亿元。"
+            "二、上年同期业绩情况 归属于上市公司股东的净利润:245.98亿元。")
+    cur, prev = g._period_amounts(text)
+    assert prev == (245.98, 245.98)
+    assert cur == (112.0, 118.0)
+    assert g.label("陕西煤业股份有限公司2023年半年度业绩预减公告", "业绩预告", text) == "strong_bearish"
+
+
+def test_delta_only_announcement_derives_current_period():
+    """只给差额、不给本期值时，用「上年 + 差额」反推。
+
+    实测江铜 2018 预增：归母只写「增加 8.02 亿元，同比增加 50%」，本期未直接给；
+    正文另有一句「经重述后，2017 年…净利润为 16.06 亿元」——显式口径会把上期
+    重述数当本期（+0.1%），与公告自报 +50% 自相矛盾。反推得 24.06 亿。
+    """
+    text = (BOILER + "预计2018年1-12月实现归属于上市公司股东的净利润与上年同期相比,"
+            "将增加8.02亿元左右,同比增加50%左右。"
+            "2018年1-12月,公司实现归属于上市公司股东的扣除非经常性损益后的净利润"
+            "为15.31亿元左右,与上年同期相比,将减少8.55亿元左右,同比减少35.83%左右。"
+            "经重述后,2017年1-12月归属上市公司股东的净利润为16.06亿元。"
+            "二、上年同期业绩情况(重述前) 归属于上市公司股东的净利润:16.04亿元。")
+    cur, prev = g._period_amounts(text)
+    assert prev == (16.04, 16.04)
+    assert cur is not None and abs(cur[0] - 24.06) < 0.01 and abs(cur[1] - 24.06) < 0.01
+    assert g._trend_band(text) == "strong_bullish"
+
+
+def test_koufei_net_profit_not_taken_as_attributable():
+    """「扣除非经常性损益后的净利润」不得当归母净利润。
+
+    实测柳钢 2025 半年度：归母 +530%~641%、扣非 +729%~887%，两者都过 50%，
+    但拿扣非金额配归母上年值会算出错误的同比；江铜那条更是 +50% 与 -35.83%
+    方向相反，取错口径直接把利空当利好。
+    """
+    text = (BOILER + "预计2025年半年度实现归属于母公司所有者的净利润约3.4亿元至4亿元,"
+            "与上年同期相比,将增加2.86亿元至3.46亿元,同比增加530%至641%。"
+            "预计2025年半年度实现归属于母公司所有者的扣除非经常性损益后的净利润"
+            "约3.15亿元至3.75亿元。"
+            "二、上年同期经营业绩和财务状况(一)利润总额:6,236万元。"
+            "归属于母公司所有者的净利润:5,414万元。")
+    cur, prev = g._period_amounts(text)
+    assert cur == (3.4, 4.0)
+    assert prev is not None and abs(prev[0] - 0.5414) < 0.001
+
+
+def test_hyphen_range_parsed_as_range_not_negative():
+    """「145.5-154.5 亿元」是区间，不是 -154.5 亿元。
+
+    实测紫金 2024/2025 预增：连字符区间若走单值正则，会从「-154.5亿元」处
+    匹配成负数，与上年正利润相减就成了「由盈转亏」。
+    """
+    assert g._amount_yi("145.5-154.5亿元") == (145.5, 154.5)
+    text = (BOILER + "预计2024年半年度实现归属于上市公司股东的净利润约人民币145.5-154.5亿元,"
+            "与上年同期103.02亿元相比,将增加约42.48-51.48亿元,同比增加约41%-50%。"
+            "二、上年同期业绩情况 2023年半年度归属于上市公司股东的净利润:103.02亿元。")
+    cur, prev = g._period_amounts(text)
+    assert cur == (145.5, 154.5)
+    assert prev == (103.02, 103.02)
+
+
+# ==== 数字解析失败时的显式表述与规则误命中（gold-v9 重标后修正）====
+
+def test_explicit_turnaround_phrase_beats_title_fallback():
+    """正文写明「实现扭亏为盈」时，即使解析不出上期数值也判强正面。
+
+    实测中石化 2021Q1/H1 预盈公告：只写本期 160–180 亿 / 365–385 亿，不列上年
+    数值，旧码退回标题方向判 bullish；而正文写「较2020年同期预计将实现扭亏
+    为盈」，按 prompt v6 的同比方向表是 strong_bullish。
+    """
+    text = (BOILER + "2021年一季度归属于母公司股东的净利润预计人民币160亿元到180亿元,"
+            "较2020年同期预计将实现扭亏为盈,较2019年同期预计将增加8.1%到21.6%。")
+    assert g._period_amounts(text) == ((160.0, 180.0), None)
+    assert g.label("2021年一季度业绩预盈公告", "业绩预告", text) == "strong_bullish"
+
+
+def test_buyback_price_cap_adjustment_is_neutral():
+    """分红实施后调整回购价格上限是机械调整，不是分红方案 → neutral。
+
+    实测五粮液「关于2025年度分红派息实施后调整回购股份价格上限的公告」被
+    「调整」关键词误命中判成 bullish；正文只写回购价上限 153.59 → 151.01 元。
+    """
+    text = (BOILER + "特别提示:1.调整前回购股份价格上限:153.59元/股。"
+            "2.调整后回购股份价格上限:151.01元/股。3.调整生效日期:2026年7月16日。")
+    title = "关于2025年度分红派息实施后调整回购股份价格上限的公告"
+    assert g.label(title, "权益分派", text) == "neutral"

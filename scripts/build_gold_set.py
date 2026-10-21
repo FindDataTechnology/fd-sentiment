@@ -62,6 +62,11 @@ RULES: list[tuple[str, tuple[str, ...], str]] = [
     # prompt v5 的 bands.md（v4 及以前把两者都归 neutral，导致 8 条对不上）。
     # v2 评测实证补充：把"实施公告"标成 bullish 是标注错误（11 条全被模型
     # 正确判成 neutral），模型对、金标错。
+    # [中性定义] 分红实施后调整**回购**价格上限：除权后按公式机械下调回购价上限，
+    # 不是新的分配决定，也不是回报政策信号 → neutral。必须排在「方案/调整」之前：
+    # 实测五粮液「分红派息实施后调整回购股份价格上限」被「调整」误命中判成
+    # bullish，而正文只写了 153.59 → 151.01 元的机械调整。
+    ("权益分派", ("回购",), "neutral"),
     ("权益分派", ("方案", "调整"), "bullish"),
     ("权益分派", ("实施",), "neutral"),
     # [中性定义] 纯事务性公告 → 中性（补 neutral 档）
@@ -77,6 +82,10 @@ RULES: list[tuple[str, tuple[str, ...], str]] = [
 TREND_IMPROVE_PCT = 50.0
 # 亏损扩大超过此比例 → 强负面；小于它 → 偏负面（温和恶化）。
 TREND_WORSEN_PCT = 50.0
+# 金额锚点阈值：单期亏损 ≥5 亿元即达 prompt v6 条件② 的「金额绝对值重大」。
+# 与 `_big_loss` 共用同一个数——两处各写一个 5 会让「同额亏损因表述不同分档」
+# 重新出现（spec sentiment-gold-coverage 的「金额锚点与同比锚点等价」）。
+BIG_LOSS_YI = 5.0
 
 
 def rule_sources() -> list[tuple[str, str, str]]:
@@ -229,14 +238,14 @@ def _big_loss(text: str) -> bool:
 
     # 带负号的金额（亿元 / 百万元）；百万元 ÷100 换算成亿元
     for m in re.finditer(r"-([\d,]+(?:\.\d+)?)\s*亿元", text):
-        if _val(m.group(1)) >= 5:
+        if _val(m.group(1)) >= BIG_LOSS_YI:
             return True
     for m in re.finditer(r"-([\d,]+(?:\.\d+)?)\s*百万元", text):
-        if _val(m.group(1), 0.01) >= 5:
+        if _val(m.group(1), 0.01) >= BIG_LOSS_YI:
             return True
     # 「亏损 … X 亿元」的正数写法
     for m in re.finditer(r"亏损[^0-9]{0,10}([\d,]+(?:\.\d+)?)\s*亿元", text):
-        if _val(m.group(1)) >= 5:
+        if _val(m.group(1)) >= BIG_LOSS_YI:
             return True
     return False
 
@@ -244,77 +253,237 @@ def _big_loss(text: str) -> bool:
 def _amount_yi(pattern_text: str) -> tuple[float, float] | None:
     """从一段文字里取出金额区间（亿元），返回 (低, 高)；单值时两者相同。
 
-    认两种口径：亿元，以及百万元（÷100 换算）。老公告常用「2,651 百万元」，
-    只认亿元会让整条样本解析失败而退回保守判定。
+    认三种口径：亿元、百万元（÷100）、万元（÷10000）。老公告常用
+    「2,651 百万元」，航空/钢铁类常用「85,000 万元」——只认亿元会让整条
+    样本解析失败而退回保守判定。正则里「百万元」必须排在「万元」之前，
+    否则「万元」会先吃掉「百万元」的后三个字。
     """
     if not pattern_text:
         return None
     flat = re.sub(r"\s+", "", pattern_text)
+    # 连字符区间必须**先于**单值匹配：「145.5-154.5亿元」若走单值正则，
+    # 会从「-154.5亿元」处匹配成负数（实测紫金 2024/2025 预增）。
     m = re.search(
-        r"(-?[\d,]+(?:\.\d+)?)\s*(亿元|百万元)"
-        r"(?:\s*到\s*(-?[\d,]+(?:\.\d+)?)\s*(?:亿元|百万元))?", flat)
+        r"(-?[\d,]+(?:\.\d+)?)[-–—~～]([\d,]+(?:\.\d+)?)(亿元|百万元|万元)", flat)
+    if m:
+        scale = {"亿元": 1.0, "百万元": 0.01, "万元": 0.0001}[m.group(3)]
+        try:
+            lo = float(m.group(1).replace(",", "")) * scale
+            hi = float(m.group(2).replace(",", "")) * scale
+        except ValueError:
+            return None
+        return (min(lo, hi), max(lo, hi))
+    m = re.search(
+        r"(-?[\d,]+(?:\.\d+)?)\s*(亿元|百万元|万元)"
+        r"(?:至|到)\s*(?:人民币)?\s*(-?[\d,]+(?:\.\d+)?)\s*(?:亿元|百万元|万元)?", flat)
+    if not m:
+        m = re.search(r"(-?[\d,]+(?:\.\d+)?)\s*(亿元|百万元|万元)", flat)
     if not m:
         return None
-    scale = 1.0 if m.group(2) == "亿元" else 0.01
+    unit = m.group(2)
+    scale = {"亿元": 1.0, "百万元": 0.01, "万元": 0.0001}[unit]
     try:
         lo = float(m.group(1).replace(",", "")) * scale
-        hi = float(m.group(3).replace(",", "")) * scale if m.group(3) else lo
+        hi = float(m.group(3).replace(",", "")) * scale if (m.lastindex or 0) >= 3 and m.group(3) else lo
     except ValueError:
         return None
     return (min(lo, hi), max(lo, hi))
 
 
+def _prior_section_start(flat: str) -> int:
+    """定位「上年同期业绩」小节起点。
+
+    小节标题有三种写法，只认「上年同期业绩」会漏掉后两种（实测柳钢用
+    「上年同期经营业绩和财务状况」，海航用「上年同期业绩情况」）。
+    同时必须跳过「与上年同期数据相比」「与上年同期相比」这类同比句式——
+    后面跟的是**变动额**不是上期数值。
+    """
+    for m in re.finditer("上年同期", flat):
+        tail = flat[m.end():m.end() + 12]
+        if tail.startswith("数据相比") or tail.startswith("相比"):
+            continue
+        if "业绩" in tail or "经营" in tail or "财务" in tail or "利润" in tail:
+            return m.start()
+    return -1
+
+
+_AMOUNT_RE = re.compile(r"-?[\d,]+(?:\.\d+)?\s*(?:亿元|百万元|万元)")
+_DELTA_VERB_RE = re.compile(r"(?:减少|下降|降低|增加|增长)")
+
+# 差额式：「…相比，将减少 X 亿元到 Y 亿元 / X-Y 亿元 / X 亿元左右」。
+# 三种写法分支必须分开写：至/到型的「亿元」夹在两个数字中间，用
+# `low (sep high)? 亿元` 的统一结构只能匹配到单值（实测柳钢 2025）。
+_DELTA_RE = re.compile(
+    r"(?:净利润|净亏损)[^。]{0,40}?相比[^。]{0,10}?(?:将)?(减少|下降|降低|增加|增长)(?:约)?"
+    r"(?:"
+    r"(?P<r_lo>-?[\d,]+(?:\.\d+)?)\s*亿元(?:左右)?(?:至|到)\s*(?:人民币)?"
+    r"(?P<r_hi>-?[\d,]+(?:\.\d+)?)\s*亿元"
+    r"|(?P<h_lo>-?[\d,]+(?:\.\d+)?)\s*[-–—~～]\s*(?P<h_hi>[\d,]+(?:\.\d+)?)\s*亿元"
+    r"|(?P<s_val>-?[\d,]+(?:\.\d+)?)\s*亿元(?:左右)?"
+    r")")
+
+
+def _signed(seg: str) -> tuple[float, float] | None:
+    """取一段文字里的净利润区间，并归一到「亏损为负」。"""
+    amt = _amount_yi(seg)
+    if amt is None:
+        return None
+    # 「净亏损」字样表示这是亏损，但数字可能写成正数
+    is_loss = ("净亏损" in seg[:40] or "亏损" in seg[:40]) and amt[1] > 0
+    if is_loss:
+        return (-amt[1], -amt[0])
+    return amt
+
+
+def _net_profit_mentions(text: str):
+    """逐个产出**归母**净利润/净亏损的提及位置，跳过扣非口径。
+
+    「归属于上市公司股东的扣除非经常性损益的净利润」也含「净利润」三个字，
+    不剔除就会把扣非金额当归母：实测江铜 2018 预增（归母 +50%、扣非 -35.83%）
+    被读成 -0.1%，柳钢 2025 半年度（归母 +530~641%、扣非 +729~887%）读成 +583%。
+    """
+    for m in re.finditer(r"(?:净亏损|净利润)", text):
+        before = text[max(0, m.start() - 16):m.start()]
+        if "扣除" in before or "非经常性损益" in before:
+            continue
+        yield m
+
+
+def _is_delta_sentence(seg: str) -> bool:
+    """这一段里的第一个金额是**变动额**而不是本期值吗？
+
+    「净利润与上年同期相比，将减少 137 亿元到 143 亿元」——137 是差额；
+    「净利润约 46.5 亿元，与上年同期相比，减少约 29 亿元」——46.5 是本期值，
+    差额在后。故判据是**金额之前**有没有增减动词，而不是整段里有没有。
+    """
+    amt = _AMOUNT_RE.search(seg)
+    if not amt:
+        return True  # 段里没有金额（如「净利润与上年同期相比下降50%以上」）
+    return _DELTA_VERB_RE.search(seg[:amt.start()]) is not None
+
+
+def _net_profit_amount(seg: str) -> tuple[float, float] | None:
+    """从「上年同期业绩」小节里取**归母净利润**，而不是小节里第一个金额。
+
+    实测柳钢 2026 预减小节写成「(一)利润总额:6.91亿元。归属于母公司所有者的
+    净利润:3.68亿元」——取第一个金额会把利润总额当上期净利润，同比从 -78%
+    算成 -43%。故先锚定归母「净利润」字样，再取其后第一个金额。
+    """
+    for m in _net_profit_mentions(seg):
+        amt = _signed(seg[m.start():m.start() + 80])
+        if amt is not None:
+            return amt
+    return _signed(seg)
+
+
+def _pick_cur(
+    explicit: tuple[float, float] | None,
+    derived: tuple[float, float] | None,
+    prev: tuple[float, float] | None,
+    text: str,
+) -> tuple[float, float] | None:
+    """本期值的两个口径不一致时，取与公告**自报同比**一致的那个。
+
+    实测江铜 2018 预增：归母本期只给差额（「增加 8.02 亿元，同比增加 50%」），
+    正文另有一句「经重述后，2017 年…净利润为 16.06 亿元」。显式口径会把上期
+    重述数当成本期值，算出 +0.1%，与公告自报的 +50% 自相矛盾；差额反推得
+    24.06 亿元，与自报一致。两个口径一致时（差值 <1pp）仍取显式口径。
+    """
+    if explicit is None:
+        return derived
+    if derived is None or prev is None:
+        return explicit
+    prev_mid = sum(prev) / 2
+    if prev_mid == 0:
+        return explicit
+
+    exp_mid, der_mid = sum(explicit) / 2, sum(derived) / 2
+    # 两个口径给出的量级一致（相对差 ≤1%）→ 用显式口径，它才是公告原文
+    if abs(exp_mid - der_mid) <= 0.01 * max(abs(exp_mid), abs(der_mid), 1e-9):
+        return explicit
+
+    def _err(cand: tuple[float, float]) -> float:
+        change = (sum(cand) / 2 - prev_mid) / abs(prev_mid) * 100
+        stated = _max_yoy_pct(text, "up" if change > 0 else "down")
+        return float("inf") if stated is None else abs(abs(change) - stated)
+
+    # 显式口径与公告自报同比严重矛盾（>20pp）、而差额反推吻合（<10pp）→ 用反推。
+    # 只在**严重**矛盾时改判：陕煤的显式值误差 2.8pp 属正常（上年有追溯调整），
+    # 不该被反推值替换。
+    if _err(explicit) > 20.0 and _err(derived) < 10.0:
+        return derived
+    return explicit
+
+
 def _period_amounts(text: str) -> tuple[tuple[float, float] | None, tuple[float, float] | None]:
     """取 (本期净利润区间, 上年同期净利润区间)，单位亿元。
 
-    本期：在「上年同期」小节**之前**的正文里找第一个「净利润/净亏损」金额。
-    上年同期：定位「上年同期业绩」小节，取该节内的第一个金额。
+    本期：在「上年同期」小节**之前**的正文里找「净利润/净亏损」金额。
+    上年同期：定位「上年同期业绩 / 经营业绩 / 财务状况」小节，取该节内的
+    归母净利润金额（不是第一个金额，见 `_net_profit_amount`）。
 
     顺序很重要：老公告（如 2008 年中石化预减）正文前半段没有本期金额，
     从全文取第一个会抓到上年同期那个数，导致「本期=上年」而判成持平。
 
-    亏损的两种写法都归一成负数：
-      · 「净亏损约为 9 亿元到 13 亿元」   → -13 ~ -9
-      · 「净利润为人民币-35 亿元到-47 亿元」 → -47 ~ -35
+    三种金额写法都要处理：
+      · 「净亏损约为 9 亿元到 13 亿元」      → -13 ~ -9（「亏损」字样 + 正数）
+      · 「净利润为人民币-35 亿元到-47 亿元」  → -47 ~ -35（带负号）
+      · 「净利润与上年同期相比，将减少 137 亿元到 143 亿元」 → **差额式**：
+        137–143 是变动额，本期 = 上年 − 差额（实测陕煤 2023，旧代码把 137 当成
+        本期利润，算出 -43% 判成偏档，实际同比 -53%~-56% 应判强负面）
+
+    本期金额**优先取正文明确写出的那个**，差额式只在本期缺失时用来反推。
+    实测柳钢 2026 预减：正文既写了本期 0.69–0.83 亿，又写了「减少 2.85–2.99
+    亿」，先算差额会把本期算成 3.92–4.06 亿，把 -78% 的强负面降成偏档。
     """
     flat = re.sub(r"\s+", "", text)
 
-    def _signed(seg: str) -> tuple[float, float] | None:
-        amt = _amount_yi(seg)
-        if amt is None:
-            return None
-        # 「净亏损」字样表示这是亏损，但数字可能写成正数
-        is_loss = ("净亏损" in seg[:40] or "亏损" in seg[:40]) and amt[1] > 0
-        if is_loss:
-            return (-amt[1], -amt[0])
-        return amt
-
-    # 定位「上年同期业绩」小节（真正列出上年数字的地方）。
-    # 不能退回到裸的「上年同期」——「与上年同期数据相比，减少约 29 亿元」
-    # 里的 29 是**变动额**不是上年值（兖矿实测：本期 46.5 亿被读成上年 29 亿）。
-    prev_idx = flat.find("上年同期业绩")
+    prev_idx = _prior_section_start(flat)
     cur_seg = flat[:prev_idx] if prev_idx > 0 else flat
 
-    cur = None
-    for m in re.finditer(
-            r"(?:归属于上市公司股东的)?(?:净亏损|净利润)[^。]{0,60}", cur_seg):
-        amt = _signed(m.group(0))
+    delta = _DELTA_RE.search(cur_seg)
+    delta_form = delta is not None
+
+    # 本期值：正文里明确写出的归母金额。差额句里的数字是变动额，跳过继续往后找。
+    explicit = None
+    for m in _net_profit_mentions(cur_seg):
+        seg = cur_seg[m.start():m.start() + 60]
+        if _is_delta_sentence(seg):
+            continue
+        amt = _signed(seg)
         if amt is not None:
-            cur = amt
+            explicit = amt
             break
 
-    # 上年值两条路：① 有「上年同期业绩」小节就直接读；② 否则用同比变动额反推
-    # （「本期 X 亿，与上年同期相比减少 Y 亿」→ 上年 = X + Y，盈利口径）。
     prev = None
     if prev_idx >= 0:
-        prev = _signed(flat[prev_idx:prev_idx + 180])
+        prev = _net_profit_amount(flat[prev_idx:prev_idx + 180])
+
+    derived = None
+    if delta_form:
+        lo_s = delta.group("r_lo") or delta.group("h_lo") or delta.group("s_val")
+        hi_s = delta.group("r_hi") or delta.group("h_hi") or lo_s
+        try:
+            d_lo = abs(float(lo_s.replace(",", "")))
+            d_hi = abs(float(hi_s.replace(",", "")))
+        except (AttributeError, ValueError):
+            d_lo = d_hi = 0.0
+        sign = -1.0 if delta.group(1) in ("减少", "下降", "降低") else 1.0
+        if prev is not None and d_hi > 0:
+            # 上年已知：本期 = 上年 + 符号×差额
+            pair = (prev[0] + sign * d_hi, prev[0] + sign * d_lo)
+            derived = (min(pair), max(pair))
+
+    cur = _pick_cur(explicit, derived, prev, flat)
+
+    # 上年值缺失时用同比变动额反推（「本期 X 亿，与上年同期相比减少 Y 亿」）
     if prev is None and cur is not None:
-        delta = re.search(r"(?:减少|下降|降低|增加|增长)(?:约)?([\d,]+(?:\.\d+)?)亿元", cur_seg)
-        if delta:
+        d = re.search(r"(?:减少|下降|降低|增加|增长)(?:约)?([\d,]+(?:\.\d+)?)亿元", cur_seg)
+        if d:
             try:
-                v = float(delta.group(1).replace(",", ""))
-                sign = 1 if re.search(r"(?:减少|下降|降低)", delta.group(0)) else -1
-                prev = (cur[0] + sign * v,) * 2
+                v = float(d.group(1).replace(",", ""))
+                s = 1 if re.search(r"(?:减少|下降|降低)", d.group(0)) else -1
+                prev = (cur[0] + s * v,) * 2
             except ValueError:
                 prev = None
     return cur, prev
@@ -334,9 +503,19 @@ def _trend_band(text: str, fallback: str = "bearish") -> str:
     预盈→bullish）。**不能一律退回 bearish**：预盈公告常常只写「预计盈利 X 亿」
     而不列上年同期小节，一律退回 bearish 会把工行、柳钢这类正常预盈判成负面
     （实测 6 条误翻）。
+
+    回退前先看正文有没有**显式方向反转表述**：「较2020年同期预计将实现扭亏为盈」
+    已经把方向说清楚了，不需要数字也能判——这比按标题回退可靠。实测中石化
+    2021Q1/H1 的预盈公告只写本期金额、不列上年数值，旧码退回标题判成 bullish，
+    而正文写明扭亏为盈，按 prompt v6 的同比方向表应是 strong_bullish。
     """
     cur, prev = _period_amounts(text)
     if cur is None or prev is None:
+        flat = re.sub(r"\s+", "", text)
+        if "扭亏为盈" in flat:
+            return "strong_bullish"
+        if "由盈转亏" in flat:
+            return "strong_bearish"
         return fallback
 
     cur_mid = sum(cur) / 2
@@ -359,7 +538,18 @@ def _trend_band(text: str, fallback: str = "bearish") -> str:
         if change >= TREND_WORSEN_PCT:
             return "strong_bearish"   # 亏损显著扩大
         if change > 0:
-            return "bearish"          # 亏损扩大（含温和扩大）
+            # 亏损扩大但幅度温和。金额锚点在此**必须**生效：prompt v6 条件②
+            # 把「单期亏损 ≥5 亿元」列为强档锚点，spec 要求标注器同等地实现
+            # 全部锚点形态（金额锚点与同比锚点等价）。只看百分比会让同样亏
+            # 113 亿的两份公告，因一份写了「扩大 4%」、另一份只写「净亏损约
+            # 113 亿元」而分到两个档。
+            #
+            # 口径分歧已裁决：**减亏类**不适用金额锚点——v6 明文要求减亏申报
+            # quant_anchor_hit=false（本期仍在亏损，不构成重大利好），故
+            # 「亏损收窄」分支不走这里，也不升强档。
+            if max(abs(cur[0]), abs(cur[1])) >= BIG_LOSS_YI:
+                return "strong_bearish"
+            return "bearish"          # 亏损扩大（小额，含温和扩大）
         # 收窄但不足 50%：仍在亏损、改善有限，方向不明
         return "neutral"
 
@@ -600,7 +790,7 @@ def main() -> int:
             store.upsert_gold(
                 set_version=args.set_version, doc_id=aid, as_of=r["published"][:10],
                 expected_band=band, text=text,
-                note=f"{ticker}｜{category}｜{r['title'][:40]}",
+                note=f"{ticker}｜{category}｜{r['title']}",
             )
             counts[band] = counts.get(band, 0) + 1
             used_by_category[category] = used_by_category.get(category, 0) + 1

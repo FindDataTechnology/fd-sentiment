@@ -15,11 +15,16 @@ from pathlib import Path
 
 PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
 
-# 服务缺省版本：与 spec 声明的评测口径一致（gold-v7 的评测用的是 v5）。
+# 服务缺省版本：与 spec 声明的评测口径一致。
 # 版本解析集中在此，所有打分入口都走 default_prompt()——不留「不传就回退 v1」
 # 的分叉。实测踩过：score_batch 没透传 prompt，批量分数全以 v1 落库，
 # 与单篇入口版本不同，两批分数在幂等键上分家、统计上不可比。
-DEFAULT_VERSION = "v5"
+#
+# 2026-10-22 切到 v6：重标后的 gold-v9（105 条）上同模型同集合对比——
+# v6 exact 91.26% / 方向 99.03%，v5 exact 87.38% / 方向 93.20%；
+# 差距集中在「亏损收窄」类（v5 按标题判负面，v6 按同比判改善）。
+# 依据见 reports/gold-v9-trend-direction-2026-10-22.md。
+DEFAULT_VERSION = "v6"
 
 BANDS_SPEC = """\
 五档定义（band 必须取其中之一，且与 score 的区间一致）：
