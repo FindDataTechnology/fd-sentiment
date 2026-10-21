@@ -45,7 +45,9 @@ def test_small_decline_stays_weak_despite_boilerplate():
 
 def test_large_decline_goes_strong():
     """同比降幅 ≥50% → 强档。"""
-    text = BOILER + "预计本期净利润同比减少 84.88%，主要因销量下滑。"
+    # 亏损显著扩大（47 亿 → 102 亿）→ 强负面
+    text = (BOILER + "预计本期净亏损约为人民币102亿元，主要因销量下滑。"
+            "上年同期业绩情况 归属于上市公司股东的净亏损:人民币46.88亿元。")
     assert g.label("某公司2020年年度业绩预亏公告", "业绩预告", text) == "strong_bearish"
 
 
@@ -55,13 +57,15 @@ def test_big_loss_amount_alone_qualifies():
     prompt v5 的 bands.md 明列「亏损金额绝对值重大（数亿元量级）」是条件②的
     一种命中方式；旧标注函数漏掉它，导致同额亏损因表述不同而分档。
     """
-    text = BOILER + "预计2020年度归属于上市公司股东的净亏损约为135亿元到155亿元。"
+    text = (BOILER + "预计2020年度归属于上市公司股东的净亏损约为135亿元到155亿元。"
+            "上年同期业绩情况 归属于上市公司股东的净利润:人民币64.09亿元。")
     assert g.label("某公司2020年年度业绩预亏公告", "业绩预告", text) == "strong_bearish"
 
 
 def test_negative_sign_amount_qualifies():
     """「净利润为人民币-102 亿元」这种带负号的写法也要认。"""
-    text = BOILER + "预计半年度归属于上市公司股东的净利润为人民币-102亿元到人民币-121亿元。"
+    text = (BOILER + "预计半年度归属于上市公司股东的净利润为人民币-102亿元到人民币-121亿元。"
+            "上年同期业绩情况 归属于上市公司股东的净亏损:人民币46.88亿元。")
     assert g.label("某公司2022年半年度业绩预亏公告", "业绩预告", text) == "strong_bearish"
 
 
@@ -93,3 +97,74 @@ def test_one_off_growth_stays_weak():
     # 有经营实质词（主营业务/销量）→ 满足③；用纯一次性损益且无经营词才降档
     text_no_op = BOILER + "预计本期净利润同比增长 120%，主要因政府补助及资产处置收益。"
     assert g.label("某公司2025年年度业绩预增公告", "业绩预告", text_no_op) == "bullish"
+
+
+# ==== 同比方向判据（v6 / gold-v9）====
+
+def test_loss_narrowing_is_positive():
+    """亏损大幅收窄 → 偏正面。
+
+    实测：国航 2023 年报从亏 386 亿收窄到亏 9–13 亿，公告标题仍叫「业绩预亏」，
+    旧规则按标题一律判强负面，而正文写「经营表现同比大幅好转」。
+    """
+    text = (BOILER + "预计2023年度归属于上市公司股东的净亏损约为人民币9亿元到人民币13亿元。"
+            "二、上年同期业绩情况 归属于上市公司股东的净亏损:人民币386.19亿元。")
+    assert g.label("某公司2023年年度业绩预亏公告", "业绩预告", text) == "bullish"
+
+
+def test_loss_widening_is_negative():
+    """亏损扩大 → 负面；扩大 ≥50% → 强负面。"""
+    mild = (BOILER + "预计净亏损约为人民币113亿元。"
+            "上年同期业绩情况 归属于上市公司股东的净亏损:人民币108.42亿元。")
+    assert g.label("某公司2021年年度业绩预亏公告", "业绩预告", mild) == "bearish"
+
+    severe = (BOILER + "预计净亏损约为人民币102亿元。"
+              "上年同期业绩情况 归属于上市公司股东的净亏损:人民币46.88亿元。")
+    assert g.label("某公司2022年半年度业绩预亏公告", "业绩预告", severe) == "strong_bearish"
+
+
+def test_profit_to_loss_is_strong_negative():
+    """由盈转亏 → 强负面（与标题方向一致，但依据是同比反转）。"""
+    text = (BOILER + "预计净亏损约为人民币135亿元。"
+            "上年同期业绩情况 归属于上市公司股东的净利润:人民币64.09亿元。")
+    assert g.label("某公司2020年年度业绩预亏公告", "业绩预告", text) == "strong_bearish"
+
+
+def test_loss_to_profit_is_strong_positive():
+    """扭亏为盈 → 强正面。"""
+    # 预盈类走 bullish 分支，由 _trend_band 的「上年亏本期盈」判强正面；
+    # 标题须命中「预盈」关键词
+    text = (BOILER + "预计净利润约为人民币6亿元。"
+            "上年同期业绩情况 归属于上市公司股东的净亏损:人民币12亿元。")
+    assert g._trend_band(text) == "strong_bullish"
+
+
+def test_small_loss_narrowing_is_neutral():
+    """亏损收窄不足 50% → 中性（仍亏损，方向不明）。"""
+    text = (BOILER + "预计净亏损约为人民币13亿元到人民币19亿元。"
+            "上年同期业绩情况 亏损总额:人民币16.05亿元。")
+    assert g.label("某公司2025年年度业绩预亏公告", "业绩预告", text) == "neutral"
+
+
+def test_prior_year_not_confused_with_delta():
+    """「与上年同期数据相比，减少约 29 亿元」里的 29 是变动额，不是上年值。
+
+    实测缺陷：把变动额当成上年净利润，算出「本期 46.5 上年 29」→ 误判为增长。
+    正确是上年 76 亿，本期 46.5 亿，同比 -38.8% → 偏负面。
+    """
+    text = (BOILER + "预计2025年半年度实现归属于上市公司股东的净利润约46.5亿元,"
+            "与上年同期数据相比,减少约29亿元或38%。")
+    cur, prev = g._period_amounts(text)
+    assert cur == (46.5, 46.5)
+    assert prev is not None and abs(prev[0] - 75.5) < 1.0, f"上年应约 75.5，实得 {prev}"
+    assert g.label("某公司2025年半年度业绩预减公告", "业绩预告", text) == "bearish"
+
+
+def test_million_yuan_unit_parsed():
+    """老公告用「2,651 百万元」，需换算成 26.51 亿元。"""
+    text = (BOILER + "预计本期净亏损约为人民币79.07亿元。"
+            "上年同期业绩情况 归属于上市公司股东的净利润:人民币2,651百万元。")
+    cur, prev = g._period_amounts(text)
+    assert cur == (-79.07, -79.07)
+    assert prev is not None and abs(prev[0] - 26.51) < 0.01
+    assert g.label("某公司2020年年度业绩预亏公告", "业绩预告", text) == "strong_bearish"

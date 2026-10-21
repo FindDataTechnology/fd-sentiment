@@ -40,7 +40,12 @@ sys.path.insert(0, str(ROOT.parent / "fd-cn-report"))
 RULES: list[tuple[str, tuple[str, ...], str]] = [
     # [强档门槛] 标题命中"预增/预盈"等只是方向；强度再交给 _strengthen 按正文判
     ("业绩预告", ("预增", "预盈", "扭亏", "大幅上升", "同向上升", "增长"), "bullish"),
-    ("业绩预告", ("预减", "预亏", "首亏", "续亏", "大幅下降", "同向下降"), "bearish"),
+    # [同比方向] 预亏/预减的**方向由同比变化决定，不由标题决定**。
+    # 标题「业绩预亏公告」是法定披露类别名，不是情绪表述：一家公司从亏 386 亿
+    # 收窄到亏 9 亿，公告标题仍叫「预亏」，但它对主体的影响是显著改善。
+    # 一律按「预亏→负面」会把 10 条亏损收窄的公告错标成强负面（gold-v8 实测）。
+    # 故此处只给「待判方向」标记，实际档位由 _trend_band() 按本期 vs 上年同期判。
+    ("业绩预告", ("预减", "预亏", "首亏", "续亏", "大幅下降", "同向下降"), "__trend__"),
     # 风险提示类：几乎全是负面（诉讼/处罚/退市风险/资金占用），用来补负面档
     ("风险提示", ("退市", "暂停上市", "重大违法", "资金占用", "违规担保", "立案"), "strong_bearish"),
     ("风险提示", ("诉讼", "处罚", "警示", "问询"), "bearish"),
@@ -61,6 +66,13 @@ RULES: list[tuple[str, tuple[str, ...], str]] = [
     ("监事会", (), "neutral"),
     ("公司治理", (), "neutral"),
 ]
+
+# 亏损收窄幅度达到此比例才认定「显著改善」。低于它（含小幅扩大/基本持平）
+# 视为方向不明 → neutral：公司仍在亏损，改善幅度不足以构成方向性利好。
+# 依据 prompt v5 的强档门槛（≥50%）与「宁可少说，不可多说」原则。
+TREND_IMPROVE_PCT = 50.0
+# 亏损扩大超过此比例 → 强负面；小于它 → 偏负面（温和恶化）。
+TREND_WORSEN_PCT = 50.0
 
 
 def rule_sources() -> list[tuple[str, str, str]]:
@@ -225,6 +237,134 @@ def _big_loss(text: str) -> bool:
     return False
 
 
+def _amount_yi(pattern_text: str) -> tuple[float, float] | None:
+    """从一段文字里取出金额区间（亿元），返回 (低, 高)；单值时两者相同。
+
+    认两种口径：亿元，以及百万元（÷100 换算）。老公告常用「2,651 百万元」，
+    只认亿元会让整条样本解析失败而退回保守判定。
+    """
+    if not pattern_text:
+        return None
+    flat = re.sub(r"\s+", "", pattern_text)
+    m = re.search(
+        r"(-?[\d,]+(?:\.\d+)?)\s*(亿元|百万元)"
+        r"(?:\s*到\s*(-?[\d,]+(?:\.\d+)?)\s*(?:亿元|百万元))?", flat)
+    if not m:
+        return None
+    scale = 1.0 if m.group(2) == "亿元" else 0.01
+    try:
+        lo = float(m.group(1).replace(",", "")) * scale
+        hi = float(m.group(3).replace(",", "")) * scale if m.group(3) else lo
+    except ValueError:
+        return None
+    return (min(lo, hi), max(lo, hi))
+
+
+def _period_amounts(text: str) -> tuple[tuple[float, float] | None, tuple[float, float] | None]:
+    """取 (本期净利润区间, 上年同期净利润区间)，单位亿元。
+
+    本期：在「上年同期」小节**之前**的正文里找第一个「净利润/净亏损」金额。
+    上年同期：定位「上年同期业绩」小节，取该节内的第一个金额。
+
+    顺序很重要：老公告（如 2008 年中石化预减）正文前半段没有本期金额，
+    从全文取第一个会抓到上年同期那个数，导致「本期=上年」而判成持平。
+
+    亏损的两种写法都归一成负数：
+      · 「净亏损约为 9 亿元到 13 亿元」   → -13 ~ -9
+      · 「净利润为人民币-35 亿元到-47 亿元」 → -47 ~ -35
+    """
+    flat = re.sub(r"\s+", "", text)
+
+    def _signed(seg: str) -> tuple[float, float] | None:
+        amt = _amount_yi(seg)
+        if amt is None:
+            return None
+        # 「净亏损」字样表示这是亏损，但数字可能写成正数
+        is_loss = ("净亏损" in seg[:40] or "亏损" in seg[:40]) and amt[1] > 0
+        if is_loss:
+            return (-amt[1], -amt[0])
+        return amt
+
+    # 定位「上年同期业绩」小节（真正列出上年数字的地方）。
+    # 不能退回到裸的「上年同期」——「与上年同期数据相比，减少约 29 亿元」
+    # 里的 29 是**变动额**不是上年值（兖矿实测：本期 46.5 亿被读成上年 29 亿）。
+    prev_idx = flat.find("上年同期业绩")
+    cur_seg = flat[:prev_idx] if prev_idx > 0 else flat
+
+    cur = None
+    for m in re.finditer(
+            r"(?:归属于上市公司股东的)?(?:净亏损|净利润)[^。]{0,60}", cur_seg):
+        amt = _signed(m.group(0))
+        if amt is not None:
+            cur = amt
+            break
+
+    # 上年值两条路：① 有「上年同期业绩」小节就直接读；② 否则用同比变动额反推
+    # （「本期 X 亿，与上年同期相比减少 Y 亿」→ 上年 = X + Y，盈利口径）。
+    prev = None
+    if prev_idx >= 0:
+        prev = _signed(flat[prev_idx:prev_idx + 180])
+    if prev is None and cur is not None:
+        delta = re.search(r"(?:减少|下降|降低|增加|增长)(?:约)?([\d,]+(?:\.\d+)?)亿元", cur_seg)
+        if delta:
+            try:
+                v = float(delta.group(1).replace(",", ""))
+                sign = 1 if re.search(r"(?:减少|下降|降低)", delta.group(0)) else -1
+                prev = (cur[0] + sign * v,) * 2
+            except ValueError:
+                prev = None
+    return cur, prev
+
+
+def _trend_band(text: str) -> str:
+    """按「本期 vs 上年同期」判方向与强度（业绩预告的预亏/预减类）。
+
+    标题只说「预亏」，但公告的实际含义取决于同比：
+
+      · 上年同期亏 386 亿、本期亏 9–13 亿  → 收窄 97%，是显著改善 → bullish
+      · 上年同期亏 10 亿、本期亏 13–19 亿  → 扩大，是恶化 → bearish/strong_bearish
+      · 上年同期盈利、本期亏损              → 由盈转亏 → strong_bearish
+      · 上年同期亏损、本期盈利              → 扭亏为盈 → strong_bullish
+
+    解析不出上期数字时退回「预亏→bearish」的保守判定，并在 note 里标注。
+    """
+    cur, prev = _period_amounts(text)
+    if cur is None or prev is None:
+        return "bearish"
+
+    cur_mid = sum(cur) / 2
+    prev_mid = sum(prev) / 2
+
+    # 由盈转亏 / 扭亏为盈：方向反转，直接给强档
+    if prev_mid > 0 and cur_mid < 0:
+        return "strong_bearish"
+    if prev_mid < 0 and cur_mid > 0:
+        return "strong_bullish"
+
+    # 两端都是亏损：比较亏损幅度
+    if prev_mid < 0 and cur_mid < 0:
+        loss_prev, loss_cur = abs(prev_mid), abs(cur_mid)
+        if loss_prev == 0:
+            return "bearish"
+        change = (loss_cur - loss_prev) / loss_prev * 100
+        if change <= -TREND_IMPROVE_PCT:
+            return "bullish"          # 亏损显著收窄
+        if change >= TREND_WORSEN_PCT:
+            return "strong_bearish"   # 亏损显著扩大
+        if change > 0:
+            return "bearish"          # 亏损扩大（含温和扩大）
+        # 收窄但不足 50%：仍在亏损、改善有限，方向不明
+        return "neutral"
+
+    # 两端都盈利：预减的语义是同比下滑
+    if prev_mid > 0 and cur_mid > 0:
+        change = (cur_mid - prev_mid) / prev_mid * 100
+        if change <= -TREND_WORSEN_PCT:
+            return "strong_bearish"
+        return "bearish"
+    return "bearish"
+
+
 def _has_operational_basis(text: str) -> bool:
     """强档第 ③ 条：理由指向经营实质，且不能只来自一次性损益。
 
@@ -261,6 +401,11 @@ def label(title: str, category: str, text: str = "") -> str | None:
             return band
         for kw in kws:
             if kw in title:
+                # __trend__：预亏/预减类，方向由同比变化决定，不看标题
+                if band == "__trend__":
+                    if category != "业绩预告":
+                        return "bearish"
+                    return _trend_band(text)
                 if band not in ("bullish", "bearish"):
                     return band
                 # 只有业绩预告的正文才承载"这份公告自身的量化锚点"
@@ -337,6 +482,14 @@ def main() -> int:
         "600519", "000333", "000001", "600036", "000858", "601318", "600030", "601899",
         "601111", "600029", "000002", "600048", "601088", "600188", "000898", "600019",
         "601398", "600028", "000063", "002415",
+        # 2026-10-19 扩样：负面样本原先全部来自国航(601111)+南航(600029)，
+        # 其余 18 家源里根本没有预减/预亏公告，导致 bearish 只有 1–4 条。
+        # 下面这批是实测确有负面预告的周期性主体（钢铁/煤炭/地产/航空/面板），
+        # 用 `query_announcements(category='业绩预告')` 逐家筛出来的：
+        #   600808 马钢 10 条、601003 柳钢 7 条、600115 东航 8 条、
+        #   601225 陕煤 3 条、600221 海航 3 条、600703 三安 3 条、
+        #   600606 绿地 2 条、600362 江铜 1 条
+        "600808", "601003", "600115", "601225", "600221", "600703", "600606", "600362",
     ]
     if args.tickers:
         for extra in args.tickers.split(","):
@@ -422,6 +575,13 @@ def main() -> int:
             band = label(r["title"], category, text)
             if band is None:
                 continue
+            # 按**实际判出的档位**限额，而不是按类别。
+            # 按类别限不住 neutral：风险提示类里绝大多数是「一般风险提示/异常波动」，
+            # 实测 18 条全判 neutral，且它属 SIGNAL_CATEGORIES 不占中性预算，
+            # 于是 neutral 膨胀到 47%，把负面档挤到只剩 8 条。
+            # neutral 只是「不该被判成有方向」的对照组，够用即可。
+            if band == "neutral" and counts.get("neutral", 0) >= neutral_budget:
+                continue
             seen.add(aid)
             store.upsert_gold(
                 set_version=args.set_version, doc_id=aid, as_of=r["published"][:10],
@@ -430,7 +590,7 @@ def main() -> int:
             )
             counts[band] = counts.get(band, 0) + 1
             used_by_category[category] = used_by_category.get(category, 0) + 1
-            if category not in SIGNAL_CATEGORIES:
+            if band == "neutral":
                 used_neutral += 1
             added += 1
             print(f"  + {aid} {band:15s} {r['title'][:34]}")
