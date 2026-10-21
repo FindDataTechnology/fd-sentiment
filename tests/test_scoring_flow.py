@@ -669,14 +669,15 @@ def test_default_prompt_is_not_historical_version():
 
     实测缺陷：server.py 用 os.getenv(..., "v4") 就地兜底，未设环境变量时
     对外自称 v4，而 spec 声明的评测口径是 v5。
-    2026-10-22 起缺省为 v6（重标 gold-v9 上 exact 91.26% / 方向 99.03%，
-    优于 v5 的 87.38% / 93.20%，见 reports/gold-v9-trend-direction-2026-10-22.md）。
+    2026-10-22 起缺省为 v7（gold-v10 上两轮 exact 95.97% / 95.16%、方向
+    99.19% / 99.19%，v6 同集 89.68% / 96.83%，
+    见 reports/gold-v10-negative-breadth-2026-10-22.md）。
     """
     from fd_sentiment.prompt import DEFAULT_VERSION, default_prompt, default_version
 
     assert default_version() != "v1"
     assert default_prompt().version == DEFAULT_VERSION
-    assert DEFAULT_VERSION == "v6", "缺省版本须与 spec 声明的评测口径一致"
+    assert DEFAULT_VERSION == "v7", "缺省版本须与 spec 声明的评测口径一致"
 
 
 def test_current_prompt_version_reports_consistency(monkeypatch):
