@@ -14,7 +14,7 @@
 | 同集合 A/B（103 条交集） | v5 exact 87.38% / 方向 93.20% → v6 **91.26% / 99.03%** |
 | 校准 | **两轮均通过，单调递增**：第一轮 20% → 87.5% → 97.3%；第二轮 40% → 86.21% → 100% |
 | 同模型输出换新尺子 | exact 87.38% → **92.23%**，方向 96.12% → 99.03% |
-| 默认版本 | 已切 `DEFAULT_VERSION = "v6"`；部署清单与镜像待更新 |
+| 默认版本 | 已切 `DEFAULT_VERSION = "v6"` 并**已上产**（镜像 `sha-f6156fa` + ArgoCD `all-services-prod`，见遗留 6） |
 
 一句话：**这一轮的收益主要来自把尺子修对，不是模型变好了。** 同一批已存的模型判断，只换金标口径，exact 就升了 4.85 个百分点。
 
@@ -252,4 +252,4 @@ PY
 3. **`bearish` 样本不足**（1 条）：需扩样到非业绩预告类别，本轮未做。
 4. **条件③ 的关键词实现偏窄**：`_has_operational_basis()` 把「有一次性损益 + 无关键词」判为不满足，而 prompt 是「**仅**来自一次性损益才不满足」（平安 2015 即此例）。
 5. **`13771222` 乱码样本**：正文不可读，模型正确拒答。建议下一版金标剔除，本轮保留以保历史可比。
-6. **生产默认版本**：代码 `DEFAULT_VERSION` 已切到 `v6`（同集合 A/B 胜出）。**尚未上产**：部署清单的 `FD_SENTIMENT_PROMPT_VERSION=v5` 未改，且运行中的镜像 `prompts/` 只有 v1–v5——需要一次镜像重建 + 环境变量更新 + 滚动发布，属独立发布动作，不在本报告范围内。
+6. **生产默认版本**：已上产。代码 `DEFAULT_VERSION = "v6"`；镜像 `ccr.ccs.tencentyun.com/finddata-business/fd-sentiment:sha-f6156fa`（含 `prompts/v6`，GHA 构建 → hkccr → tcr-relay 回灌 ccr）经 ArgoCD `all-services-prod`（deploy 仓 `5e47254`）滚动完成；部署清单 `FD_SENTIMENT_PROMPT_VERSION=v6`。验证：pod 内 `prompts/` 含 v6、`current_prompt_version` 返回 `v6` 且 `declared_matches_actual=true`、真实打分探针（南航 2025 半年度预亏）返回 `band=bearish` 并带 4 段逐字引用。
