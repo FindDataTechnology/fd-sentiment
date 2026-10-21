@@ -168,3 +168,41 @@ def test_million_yuan_unit_parsed():
     assert cur == (-79.07, -79.07)
     assert prev is not None and abs(prev[0] - 26.51) < 0.01
     assert g.label("某公司2020年年度业绩预亏公告", "业绩预告", text) == "strong_bearish"
+
+
+# ==== 预盈/扭亏 走同比分支（v6-final）====
+
+def test_profit_turnaround_routes_through_trend():
+    """预盈/扭亏标题必须先于「预增」匹配，否则扭亏被判成普通增长。
+
+    实测：海航 2025 年报「上年亏、本期盈」，旧路由走 bullish 分支判成偏档，
+    正确应是 strong_bullish（扭亏为盈是方向反转）。
+    """
+    text = (BOILER + "预计2025年度实现归属于上市公司股东的净利润约为人民币6亿元。"
+            "上年同期业绩情况 归属于上市公司股东的净亏损:人民币12亿元。")
+    assert g.label("海航控股：2025年年度业绩预盈的公告", "业绩预告", text) == "strong_bullish"
+
+
+def test_missing_prior_year_falls_back_to_title_direction():
+    """没有「上年同期业绩」小节时按标题方向回退，不能一律退回 bearish。
+
+    实测：工行/柳钢的预盈公告只写「预计盈利 X 亿」不列上期，一律退回 bearish
+    会把 6 条正常预盈判成负面。
+    """
+    text = BOILER + "预计2021年一季度归属于母公司股东的净利润预计人民币160亿元到180亿元。"
+    assert g.label("2021年一季度业绩预盈公告", "业绩预告", text) == "bullish"
+
+    loss_text = BOILER + "预计本期将出现亏损。"
+    assert g.label("某公司2021年年度业绩预亏公告", "业绩预告", loss_text) == "bearish"
+
+
+def test_amount_anchor_is_loss_only():
+    """金额锚点只适用于亏损，不适用于盈利。
+
+    v6 曾写成「亏损或盈利金额 ≥ 5 亿元」，导致大盘蓝筹的温和增长
+    （如工行 +10.4%、中信 +32%）因「盈利金额大」被判成强正面。
+    """
+    prompt_text = (Path(__file__).resolve().parent.parent
+                   / "fd_sentiment" / "prompts" / "v6" / "bands.md").read_text(encoding="utf-8")
+    assert "只适用于亏损" in prompt_text
+    assert "亏损或盈利金额" not in prompt_text

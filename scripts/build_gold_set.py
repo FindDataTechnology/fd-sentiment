@@ -38,8 +38,12 @@ sys.path.insert(0, str(ROOT.parent / "fd-cn-report"))
 #   [中性定义] bands.md neutral 条：纯事务性 / 正负相抵
 #   [拒答边界] system.md「何时拒答」：只对读不出内容者拒答（不属于标注范畴）
 RULES: list[tuple[str, tuple[str, ...], str]] = [
-    # [强档门槛] 标题命中"预增/预盈"等只是方向；强度再交给 _strengthen 按正文判
-    ("业绩预告", ("预增", "预盈", "扭亏", "大幅上升", "同向上升", "增长"), "bullish"),
+    # [同比方向] 预盈/扭亏：语义是「从亏到盈」，方向与强度都由同比决定。
+    # 必须排在「预增」之前——标题同时含「预盈」与「增长」时，按后者会走
+    # 普通增长分支，把「上年亏 12 亿、本期盈 6 亿」这种扭亏判成偏档（实测 2 条）。
+    ("业绩预告", ("预盈", "扭亏"), "__trend__"),
+    # [强档门槛] 标题命中"预增"等只是方向；强度再交给 _strengthen 按正文判
+    ("业绩预告", ("预增", "大幅上升", "同向上升", "增长"), "bullish"),
     # [同比方向] 预亏/预减的**方向由同比变化决定，不由标题决定**。
     # 标题「业绩预亏公告」是法定披露类别名，不是情绪表述：一家公司从亏 386 亿
     # 收窄到亏 9 亿，公告标题仍叫「预亏」，但它对主体的影响是显著改善。
@@ -316,8 +320,8 @@ def _period_amounts(text: str) -> tuple[tuple[float, float] | None, tuple[float,
     return cur, prev
 
 
-def _trend_band(text: str) -> str:
-    """按「本期 vs 上年同期」判方向与强度（业绩预告的预亏/预减类）。
+def _trend_band(text: str, fallback: str = "bearish") -> str:
+    """按「本期 vs 上年同期」判方向与强度（业绩预告的预亏/预减/预盈/扭亏）。
 
     标题只说「预亏」，但公告的实际含义取决于同比：
 
@@ -326,11 +330,14 @@ def _trend_band(text: str) -> str:
       · 上年同期盈利、本期亏损              → 由盈转亏 → strong_bearish
       · 上年同期亏损、本期盈利              → 扭亏为盈 → strong_bullish
 
-    解析不出上期数字时退回「预亏→bearish」的保守判定，并在 note 里标注。
+    解析不出上期数字时退回 `fallback`（由调用方按标题方向给出：预亏→bearish，
+    预盈→bullish）。**不能一律退回 bearish**：预盈公告常常只写「预计盈利 X 亿」
+    而不列上年同期小节，一律退回 bearish 会把工行、柳钢这类正常预盈判成负面
+    （实测 6 条误翻）。
     """
     cur, prev = _period_amounts(text)
     if cur is None or prev is None:
-        return "bearish"
+        return fallback
 
     cur_mid = sum(cur) / 2
     prev_mid = sum(prev) / 2
@@ -356,12 +363,16 @@ def _trend_band(text: str) -> str:
         # 收窄但不足 50%：仍在亏损、改善有限，方向不明
         return "neutral"
 
-    # 两端都盈利：预减的语义是同比下滑
+    # 两端都盈利：按同比方向判（预增/预减都走这里，以正文数字为准）
     if prev_mid > 0 and cur_mid > 0:
         change = (cur_mid - prev_mid) / prev_mid * 100
         if change <= -TREND_WORSEN_PCT:
             return "strong_bearish"
-        return "bearish"
+        if change < 0:
+            return "bearish"
+        if change >= TREND_IMPROVE_PCT:
+            return "strong_bullish"
+        return "bullish"
     return "bearish"
 
 
@@ -401,11 +412,14 @@ def label(title: str, category: str, text: str = "") -> str | None:
             return band
         for kw in kws:
             if kw in title:
-                # __trend__：预亏/预减类，方向由同比变化决定，不看标题
+                # __trend__：预亏/预减/预盈/扭亏类，方向由同比变化决定，不看标题。
+                # 解析不出上期数字时按**标题方向**回退：预盈/扭亏 → bullish，
+                # 预亏/预减 → bearish（见 _trend_band 的 fallback 说明）。
                 if band == "__trend__":
                     if category != "业绩预告":
                         return "bearish"
-                    return _trend_band(text)
+                    fallback = "bullish" if kw in ("预盈", "扭亏") else "bearish"
+                    return _trend_band(text, fallback=fallback)
                 if band not in ("bullish", "bearish"):
                     return band
                 # 只有业绩预告的正文才承载"这份公告自身的量化锚点"
