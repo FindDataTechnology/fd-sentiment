@@ -270,7 +270,23 @@ FD_SENTIMENT_LLM_API_KEY=... python3 /tmp/run_eval_v10.py <db> <v6|v7> <out.json
 独立复现第二轮时**必须用干净库**：分数按 `(doc_id, content_hash, prompt_version, model)`
 缓存，同库重跑会命中缓存，拿到的不是新样本而是上一轮的结果。
 
-## 8. 遗留
+## 8. 上产
+
+| 项 | 值 |
+|---|---|
+| 代码提交 | `cb1085e`（标注器 + gold-v10）、`53d29d5`（缺省版本切 v7 + 报告 + 技能稿） |
+| 镜像 | `ccr.ccs.tencentyun.com/finddata-business/fd-sentiment:sha-53d29d5`（含 `prompts/v7`） |
+| 部署清单 | `fd-infra-deploy` `6e89631`（镜像 tag + `FD_SENTIMENT_PROMPT_VERSION=v7`） |
+| ArgoCD | `all-services-prod` → Synced / Healthy，Pod `fd-sentiment-6475c4f475-r6gft` |
+| 版本自检 | `prompt_version=v7`、`prompt_digest=33d6f8434d5ebef4`、`declared_matches_actual=true` |
+| 生产库 | gold-v10 128 条（39/20/42/16/11）+ 三个 run（v6 一轮、v7 两轮），共 16 个 run |
+
+生产端真实打分探针（小额扭亏样本）实测 `band=bullish, score=0.4, confidence=0.92`，
+`strong_tier_check.summary` 自述「上年同期亏损 1.4472 亿元、本期盈利 5000 万至 5800 万元
+均未达到金额重大标准，故不进入强档」——v7 的金额门槛在生产链路上按预期生效，
+且 3 条 evidence_spans 均为原文逐字片段。
+
+## 9. 遗留
 
 1. `bearish` 档虽然到了 16 条，但 15 条来自「拟减持」单一规则、3 条来自同一家公司。
    下一轮若要让它代表「所有温和利空」，需要再扩诉讼（本次只有 1 条可得）与
