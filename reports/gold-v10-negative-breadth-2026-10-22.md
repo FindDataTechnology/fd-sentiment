@@ -286,6 +286,20 @@ FD_SENTIMENT_LLM_API_KEY=... python3 /tmp/run_eval_v10.py <db> <v6|v7> <out.json
 均未达到金额重大标准，故不进入强档」——v7 的金额门槛在生产链路上按预期生效，
 且 3 条 evidence_spans 均为原文逐字片段。
 
+### 8.1 技能与 pack 重新发布
+
+| 项 | 值 |
+|---|---|
+| 市场 pack | `柏讯 · 舆情驱动`（id `aMdkHzCbsc3fPsYiqMDUOA`）→ **v3**，作者 `aloadtree@gmail.com`，public |
+| 技能源仓 | Gitee `finddata-skills` `fede185`（三份 SKILL.md 已推 master） |
+| 网关注册表 | 无需重推：条目只存 `skill_md_url`，正文由 Gitee 实时提供 |
+| 验收 | 市场端读 v3 manifest：description/persona 含新口径、三份内联正文含 `gold-v10`、无「尚未通过校准评测」；匿名列表可见 |
+
+**顺带修掉一处过期对外表述**：三份技能稿的免责声明与 suite 描述/persona 原写
+「当前 prompt 版本尚未通过校准评测」——那是 v1–v4 时代的真实状态，但 v7 已两轮
+通过校准。已改为「两轮复测置信桶单调递增、方向一致率 99.19%，但五档精档之间
+仍有相邻档误判」，并写明依据。
+
 ## 9. 遗留
 
 1. `bearish` 档虽然到了 16 条，但 15 条来自「拟减持」单一规则、3 条来自同一家公司。
