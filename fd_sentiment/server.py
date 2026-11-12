@@ -61,6 +61,10 @@ def build_server() -> FastMCP:
         ),
     )
 
+    from . import wellknown
+
+    wellknown.register(app)  # /.well-known/line-manifest.json（公开、免鉴权、零网络）
+
     # 版本解析只在 prompt.default_prompt() 一处：所有入口共用同一工件。
     # 曾用 `os.getenv(..., "v4")` 就地兜底，结果对外自称 v4、声明口径却是 v5。
     DEFAULT_PROMPT = default_prompt()

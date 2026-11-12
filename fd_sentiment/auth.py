@@ -21,7 +21,15 @@ ENV_TOKEN = "MCP_BEARER_TOKEN"
 # 健康面豁免：探针永远不带钥匙，且只回状态，不是数据面。本线今天把 /health
 # 挂在另一个监听上，所以这条豁免在这里不改行为；写进来是为了**同族中立**——
 # 抄这份文件的人如果沿用同一 app 挂 /healthz，不会把探针打死。
-EXEMPT_PATHS = ("/health", "/healthz")
+EXEMPT_PATHS = (
+    "/health",
+    "/healthz",
+    # 线自描述端点（change converge-line-identity-and-keys 1.4）：公开元数据，
+    # 未持有本线凭据的调用方也要能读到「这条线认哪些钥匙」。必须与
+    # ``wellknown.register()`` 挂的路由**成对**存在——只加路由不加这里，
+    # 配了令牌的线会对匿名发现请求回 401。
+    "/.well-known/line-manifest.json",
+)
 
 
 def configured_token() -> str:
