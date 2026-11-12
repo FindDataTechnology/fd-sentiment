@@ -6,9 +6,18 @@
     "issuer": "https://auth.finddatatech.cloud/oidc",
     "jwks_uri": "https://auth.finddatatech.cloud/oidc/jwks",
     "jit_policy": "off",
-    "note": "本仓零入站凭据校验：`FastMCP(name=SERVER_NAME, ...)` 未传 auth、未挂中间件（server.py:52）。仓内出现的 `api_key` 全是**出站**用（走词元网关调 LLM：llm.py:29-73，`FD_SENTIMENT_LLM_API_KEY`/`LLM_GATEWAY_API_KEY`），不是入站校验。无断言兑换端点，jit_policy=off。"
+    "note": "生产态今天仍是零入站凭据校验（部署未注入任何 token；仓内 `api_key` 全是**出站** LLM 凭据，llm.py:29-73）。但**代码里已备好共享 bearer 门**：`fd_sentiment/auth.py` 的 `BearerAuthMiddleware`（恒时比较、每请求重读、`/health` 与 `/healthz` 精确豁免），未设变量时 `serve_http()` 仍走 `app.run(transport=\"http\")`（server.py:296-320，与接入前逐字节一致）。"
   },
   "auth_tracks": [
+    {
+      "kind": "line-native",
+      "name": "mcp-bearer-token",
+      "accepts": "line-native-key",
+      "fallback": false,
+      "enforced": false,
+      "migration_task": "converge-line-identity-and-keys#8.6",
+      "note": "线自有共享钥匙，**代码已落地**（门判据 11 条通过，借同族 3.4 venv + PYTHONPATH 跑的——本仓无 venv，**全量 38 项离线用例未跑**，故不宣称全套绿）。未在运行路径生效：生产无该变量，且经网关的消费者拿不到自己的 Authorization。翻转前提见 8.6 三步。"
+    },
     {
       "kind": "customer-key",
       "accepts": "ciyuan-sk",
@@ -31,5 +40,5 @@
     "account": false,
     "admin": false
   },
-  "note": "10 工具五组：打分 / 查询 / 聚合 / 元信息 / 评测；4 个非只读（打分与写入分数）。分数可验证（evidence_spans 必填、quote 逐字子串）与可复现（幂等键 doc_id+content_hash+prompt_version+model）。"
+  "note": "10 工具五组：打分 / 查询 / 聚合 / 元信息 / 评测；4 个非只读（打分与写入分数）。分数可验证（evidence_spans 必填、quote 逐字子串）与可复现（幂等键 doc_id+content_hash+prompt_version+model）。 **8.6 线自有钥匙**：门与本族其余线同形，/health(z) 精确豁免。"
 }
