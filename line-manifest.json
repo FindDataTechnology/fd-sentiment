@@ -1,0 +1,35 @@
+{
+  "schema": "line-manifest/v1",
+  "line": "sentiment",
+  "public_base_url": "https://mcp.finddatatech.cloud/fd-sentiment",
+  "identity": {
+    "issuer": "https://auth.finddatatech.cloud/oidc",
+    "jwks_uri": "https://auth.finddatatech.cloud/oidc/jwks",
+    "jit_policy": "off",
+    "note": "本仓零入站凭据校验：`FastMCP(name=SERVER_NAME, ...)` 未传 auth、未挂中间件（server.py:52）。仓内出现的 `api_key` 全是**出站**用（走词元网关调 LLM：llm.py:29-73，`FD_SENTIMENT_LLM_API_KEY`/`LLM_GATEWAY_API_KEY`），不是入站校验。无断言兑换端点，jit_policy=off。"
+  },
+  "auth_tracks": [
+    {
+      "kind": "customer-key",
+      "accepts": "ciyuan-sk",
+      "fallback": false,
+      "enforced": false,
+      "migration_task": "converge-line-identity-and-keys#8.3",
+      "note": "未接：本仓不解析入站凭据。"
+    }
+  ],
+  "scopes": [
+    "line:read",
+    "line:write"
+  ],
+  "billing": {
+    "plane": "ciyuan",
+    "note": "本仓零计费代码（grep `sub2api` 无命中）：按调用扣费发生在网关/registry 的词元平面，不在本线代码里。打分本身要花模型钱（走词元网关），但这笔钱由**调用方自带 key** 的网关通道结，本仓不记账。"
+  },
+  "surfaces": {
+    "mcp": true,
+    "account": false,
+    "admin": false
+  },
+  "note": "10 工具五组：打分 / 查询 / 聚合 / 元信息 / 评测；4 个非只读（打分与写入分数）。分数可验证（evidence_spans 必填、quote 逐字子串）与可复现（幂等键 doc_id+content_hash+prompt_version+model）。"
+}
