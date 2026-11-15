@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "寻数·柏讯情绪打分服务：可审计、可评测、幂等可复现的文档情绪分数"
 requires-python = ">=3.11"
 dependencies = [
+    # 门 K 线票校验（`line_token.py`）：只有词元轨开启时才走到，但必须声明——
+    # 否则镜像缺包，线上表现为 `not_configured`（门静默不挂），而本机测试照绿。
+    "pyjwt[crypto]>=2.8",
     "httpx>=0.27",
 ]
 
