@@ -130,24 +130,38 @@
     },
     {
       "group": "eval",
-      "level": "commercial",
+      "level": "internal",
       "tools": [
         "run_evaluation",
         "compare_evaluations"
       ],
-      "description": "金标评测与版本对比（有状态：结果落 eval_runs）。输出命中率 + 按置信度分桶的准确率表；高置信桶低于低置信桶即**校准失败**并显式标注。金标集按 set_version 版本化。"
+      "description": "金标评测与版本对比（有状态：结果落 eval_runs）。输出命中率 + 按置信度分桶的准确率表；高置信桶低于低置信桶即**校准失败**并显式标注。金标集按 set_version 版本化。",
+      "notes": "评测基线（run_evaluation 落金标评测报告、compare_evaluations 对比）是质量基建，不是对客能力。2026-11-25 降为 internal——无任何 pack 引用。"
     },
     {
       "group": "task",
-      "level": "commercial",
+      "level": "internal",
       "tools": [
         "get_task_status",
         "retry_failed"
       ],
-      "description": "长任务原语（mcp-long-running-operations）：get_task_status 查进度与逐条结果（只读），retry_failed 只重跑失败/未处理条目。任务状态落 SQLite，服务重启后仍可查询——被打断的任务报 interrupted 并说明已完成的条目仍有效，而不是「未知任务」。"
+      "description": "长任务原语（mcp-long-running-operations）：get_task_status 查进度与逐条结果（只读），retry_failed 只重跑失败/未处理条目。任务状态落 SQLite，服务重启后仍可查询——被打断的任务报 interrupted 并说明已完成的条目仍有效，而不是「未知任务」。",
+      "notes": "异步任务查询与失败重试（get_task_status / retry_failed）。运维面，2026-11-25 降为 internal（get_task_status 仍可被 internal 消费者用）。"
     }
   ],
   "registry": {
     "expected_tool_count": 10
+  },
+  "rules": {
+    "commercial_exemptions": [
+      {
+        "tool": "score_batch",
+        "reason": "打分面（score_document / score_batch）写的是分数与幂等键，是对客能力：客户提交文档拿回可审计分数。"
+      },
+      {
+        "tool": "score_document",
+        "reason": "打分面（score_document / score_batch）写的是分数与幂等键，是对客能力：客户提交文档拿回可审计分数。"
+      }
+    ]
   }
 }
